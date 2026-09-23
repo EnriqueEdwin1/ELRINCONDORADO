@@ -1,0 +1,56 @@
+@model ELRINCONDORADO.Models.Producto
+@{
+    ViewData["Title"] = "Eliminar Producto";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card text-center">
+            <h2>Eliminar Producto</h2>
+            @if (!string.IsNullOrEmpty(Model.ImagenUrl))
+            {
+                <img src="@Model.ImagenUrl" class="img-thumbnail mb-3" style="max-height: 120px;" alt="@Model.Nombre" />
+            }
+            <p class="mb-4">¿Estás seguro de que deseas eliminar <strong>@Model.Nombre</strong>?</p>
+            <p class="text-muted mb-4">Esta acción no se puede deshacer.</p>
+
+            @if (Model.Receta != null)
+            {
+                <div class="alert alert-warning">Este producto tiene una receta asociada. No se puede eliminar.</div>
+            }
+
+            <form asp-action="Delete" method="post">
+                <input type="hidden" asp-for="IdProducto" />
+                <button type="submit" class="btn btn-eliminar w-100 mb-2">Sí, eliminar</button>
+                <a asp-action="Index" class="btn btn-link w-100">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

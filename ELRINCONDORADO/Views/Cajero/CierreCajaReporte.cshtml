@@ -1,0 +1,157 @@
+@model ELRINCONDORADO.Models.CierreCajaViewModel
+@using ELRINCONDORADO.Models
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Cierre de Caja";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - El Rincón Dorado</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: #f3f0e8; padding: 24px 12px; }
+
+        .acciones {
+            max-width: 800px; margin: 0 auto 16px; display: flex; gap: 8px;
+            flex-wrap: wrap; align-items: center; justify-content: space-between;
+        }
+        .acciones h2 { font-size: 16px; color: #5c4a1e; margin-right: auto; }
+        .acciones a, .acciones button {
+            border: none; cursor: pointer; text-decoration: none; font-size: 13px;
+            font-weight: 700; border-radius: 9px; padding: 10px 16px; transition: all .25s ease;
+        }
+        .btn-pdf { color: #fff; background: linear-gradient(135deg, #d4af37, #b8941e); }
+        .btn-imprimir { color: #fff; background: linear-gradient(135deg, #4a7bd1, #2f56a8); }
+        .btn-cerrar { color: #fff; background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .acciones a:hover, .acciones button:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.18); }
+
+        /* ===== HOJA CARTA ===== */
+        .hoja {
+            width: 215.9mm; min-height: 279.4mm; margin: 0 auto; background: #fff;
+            border-radius: 4px; padding: 14mm 16mm; box-shadow: 0 12px 30px rgba(0,0,0,.18);
+            color: #1a1a1a; font-size: 12px; line-height: 1.5;
+        }
+        .encabezado { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #d4af37; padding-bottom: 10px; }
+        .encabezado img.logo { height: 62px; object-fit: contain; }
+        .encabezado .titulos { text-align: center; flex: 1; }
+        .encabezado .titulos .tienda { font-size: 20px; font-weight: 800; letter-spacing: 1px; color: #b8941e; }
+        .encabezado .titulos .tipo { font-size: 14px; font-weight: 700; }
+        .encabezado .titulos .datos { font-size: 11px; color: #666; }
+
+        h3.seccion { font-size: 13px; color: #b8941e; margin: 14px 0 6px; font-weight: 800; }
+        table.reporte { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        table.reporte th {
+            background: linear-gradient(135deg, #d4af37, #b8941e); color: #fff;
+            padding: 6px 5px; text-align: left; font-size: 10.5px;
+        }
+        table.reporte th.d { text-align: right; }
+        table.reporte td { padding: 5px; border-bottom: 1px solid #e9e4d8; vertical-align: top; }
+        table.reporte td.d { text-align: right; }
+        .total-fila td { border-top: 2px solid #000; font-weight: 700; }
+
+        .resumen { margin-top: 16px; display: flex; justify-content: space-between; gap: 16px; }
+        .resumen .detalles { font-size: 11px; flex: 1; }
+        .resumen .detalles p { margin: 3px 0; }
+        .cuadro { border: 2px solid #d4af37; border-radius: 8px; padding: 10px 16px; min-width: 230px; }
+        .cuadro .fila { display: flex; justify-content: space-between; margin: 4px 0; font-size: 12px; }
+        .cuadro .tot { border-top: 2px solid #000; margin-top: 6px; padding-top: 6px; font-size: 15px; font-weight: 800; }
+        .cuadro .tot .v { color: #b8941e; }
+        .pie { margin-top: 26px; text-align: center; font-size: 10px; color: #777; }
+
+        /* ===== IMPRESIÓN ===== */
+        @@media print {
+            body { background: #fff; padding: 0; }
+            .acciones { display: none !important; }
+            .hoja { box-shadow: none; border-radius: 0; width: 100%; margin: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="acciones">
+        <h2>🧾 Cierre de caja</h2>
+        <a class="btn-pdf" href="/Cajero/CierreCajaPdf" target="_blank" rel="noopener">📄 Descargar PDF (Hoja carta)</a>
+        <button class="btn-imprimir" type="button" onclick="window.print()">🖨️ Imprimir</button>
+        <form method="post" action="/Auth/Logout" style="display: inline;">
+            <button type="submit" class="btn-cerrar">✕</button>
+        </form>
+    </div>
+
+    <div class="hoja">
+        <div class="encabezado">
+            <img src="~/img/logo.png" alt="Logo El Rincón Dorado" class="logo" />
+            <div class="titulos">
+                <div class="tienda">EL RINCÓN DORADO</div>
+                <div class="tipo">REPORTE DE CIERRE DE CAJA</div>
+                <div class="datos">Cajero: @Model.Cajero &nbsp;|&nbsp; Fecha: @Model.Fecha.ToString("dd/MM/yyyy HH:mm")</div>
+            </div>
+        </div>
+
+        <h3 class="seccion">VENTAS DEL DÍA</h3>
+        @if (Model.Ventas.Count == 0)
+        {
+            <p style="text-align:center; color:#999; padding: 20px 0;">No se registraron ventas este día.</p>
+        }
+        else
+        {
+            <table class="reporte">
+                <thead>
+                    <tr>
+                        <th>Factura</th>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Cliente</th>
+                        <th>Pago</th>
+                        <th>Estado</th>
+                        <th class="d">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var venta in Model.Ventas)
+                    {
+                        var tipo = venta.TipoPedido == "MESA"
+                            ? (venta.Mesa != null ? "Mesa " + venta.Mesa.Numero : "Mesa")
+                            : "Para llevar";
+                        var cliente = !string.IsNullOrWhiteSpace(venta.NombrePedido)
+                            ? venta.NombrePedido
+                            : (!string.IsNullOrWhiteSpace(venta.Cliente?.RazonSocial) ? venta.Cliente.RazonSocial : "—");
+                        <tr>
+                            <td>@(venta.NumeroPedido ?? venta.IdPedido.ToString("D4"))</td>
+                            <td>@venta.FechaCreacion.ToLocalTime().ToString("HH:mm")</td>
+                            <td>@tipo</td>
+                            <td>@cliente</td>
+                            <td>@venta.EstadoPago</td>
+                            <td>@venta.Estado</td>
+                            <td class="d">@MonedaHelper.FormatearBs(venta.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="resumen">
+            <div class="detalles">
+                <h3 class="seccion" style="margin-top:0;">RESUMEN</h3>
+                <p><strong>Cantidad de ventas:</strong> @Model.Cantidad</p>
+                <p><strong>Subtotal:</strong> @MonedaHelper.FormatearBs(Model.Subtotal)</p>
+            </div>
+            <div class="cuadro">
+                <div class="fila"><span>Efectivo</span><span>@MonedaHelper.FormatearBs(Model.Efectivo)</span></div>
+                <div class="fila"><span>Tarjeta</span><span>@MonedaHelper.FormatearBs(Model.Tarjeta)</span></div>
+                <div class="fila"><span>QR</span><span>@MonedaHelper.FormatearBs(Model.QR)</span></div>
+                <div class="fila tot"><span>TOTAL</span><span class="v">@MonedaHelper.FormatearBs(Model.Total)</span></div>
+            </div>
+        </div>
+
+        <div class="pie">
+            El Rincón Dorado – Confianza y rendimiento<br />
+            Documento generado el @DateTime.Now.ToString("dd/MM/yyyy HH:mm")
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

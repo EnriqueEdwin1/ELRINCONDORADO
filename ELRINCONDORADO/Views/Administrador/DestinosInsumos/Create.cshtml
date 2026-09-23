@@ -1,0 +1,74 @@
+@model ELRINCONDORADO.Models.DestinoInsumo
+@{
+    ViewData["Title"] = "Agregar Destino";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Agregar Destino</h2>
+            <form asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Nombre" class="form-label">Nombre</label>
+                    <input asp-for="Nombre" class="form-control" placeholder="Ej: Cocina" required
+                           pattern="[A-Za-z ÁÉÍÓÚÜÑáéíóúüñ]+"
+                           title="El nombre no puede contener números." />
+                    <small class="text-danger d-none" id="ErrorNombre"></small>
+                </div>
+
+                <button type="submit" class="btn btn-guardar">Guardar</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var campo = document.getElementById('Nombre');
+            var msj = document.getElementById('ErrorNombre');
+            if (!campo) return;
+            campo.addEventListener('keydown', function (e) {
+                if (e.key >= '0' && e.key <= '9') e.preventDefault();
+            });
+            campo.addEventListener('input', function () {
+                if (/\d/.test(campo.value)) {
+                    campo.setCustomValidity('El nombre no puede contener números.');
+                    msj.classList.remove('d-none');
+                    msj.textContent = 'El nombre no puede contener números.';
+                } else {
+                    campo.setCustomValidity('');
+                    msj.classList.add('d-none');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

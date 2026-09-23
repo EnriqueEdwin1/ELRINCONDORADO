@@ -1,0 +1,152 @@
+@model ELRINCONDORADO.Models.Producto
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Detalle de Producto";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">@Model.Nombre</h2>
+            <div class="d-flex gap-2">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary">← Volver a administración</a>
+                <a asp-action="Index" class="btn btn-outline-secondary">Volver</a>
+                <a asp-action="Edit" asp-route-id="@Model.IdProducto" class="btn btn-modulo">Editar</a>
+                <a asp-action="Delete" asp-route-id="@Model.IdProducto" class="btn btn-eliminar">Eliminar</a>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="form-card p-3 h-100">
+                    <h6 class="text-muted">Imagen</h6>
+                    @if (!string.IsNullOrEmpty(Model.ImagenUrl))
+                    {
+                        <img src="@Model.ImagenUrl" alt="@Model.Nombre" class="img-fluid rounded" style="max-height: 180px; object-fit: cover;" />
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">Sin imagen.</p>
+                    }
+                </div>
+            </div>
+            <div class="col-md-8 mb-3">
+                <div class="form-card p-3 h-100">
+                    <h6 class="text-muted">Información del producto</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Código</small>
+                            <strong>@(string.IsNullOrEmpty(Model.Codigo) ? "—" : Model.Codigo)</strong>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Categoría</small>
+                            <strong>@Model.Categoria?.Nombre</strong>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Precio</small>
+                            <strong>@MonedaHelper.FormatearBs(Model.Precio)</strong>
+                        </div>
+                        <div class="col-md-6 mb-2">
+                            <small class="text-muted d-block">Estado</small>
+                            <span class="badge-estado @(Model.Activo ? "activo" : "inactivo")">
+                                @(Model.Activo ? "ACTIVO" : "INACTIVO")
+                            </span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.Descripcion))
+                        {
+                            <div class="col-12 mb-2">
+                                <small class="text-muted d-block">Descripción</small>
+                                <span>@Model.Descripcion</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Receta del producto</h5>
+                @if (Model.Receta != null)
+                {
+                    <a href="/Recetas/Details/@Model.Receta.IdReceta" class="btn btn-modulo btn-sm">Ver receta</a>
+                }
+                else
+                {
+                    <a href="/Recetas/Create?idProducto=@Model.IdProducto" class="btn btn-modulo btn-sm">+ Agregar receta</a>
+                }
+            </div>
+
+            @if (Model.Receta != null)
+            {
+                <p class="text-muted mb-2">
+                    @(string.IsNullOrEmpty(Model.Receta.Descripcion) ? "Sin descripción." : Model.Receta.Descripcion)
+                </p>
+                <table class="table table-crud">
+                    <thead>
+                        <tr>
+                            <th>Insumo</th>
+                            <th>Cantidad</th>
+                            <th>Unidad de medida</th>
+                            <th>Costo unitario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Receta.DetalleRecetas != null && Model.Receta.DetalleRecetas.Any())
+                        {
+                            @foreach (var detalle in Model.Receta.DetalleRecetas)
+                            {
+                                <tr>
+                                    <td>@detalle.Insumo?.Nombre</td>
+                                    <td>@MonedaHelper.FormatearNumero(detalle.Cantidad)</td>
+                                    <td>@detalle.UnidadMedida</td>
+                                    <td>@MonedaHelper.FormatearBs(detalle.Insumo?.CostoUnitario ?? 0)</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">La receta no tiene insumos cargados.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <div class="alert alert-warning mb-0">
+                    Este producto no tiene una receta asociada todavía.
+                    <a href="/Recetas/Create?idProducto=@Model.IdProducto">Agregar receta</a>.
+                </div>
+            }
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

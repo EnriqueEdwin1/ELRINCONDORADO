@@ -1,0 +1,77 @@
+@model ELRINCONDORADO.Models.Empleado
+@{
+    ViewData["Title"] = "Detalle Empleado";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/empleados.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Detalle del Empleado</h2>
+            <dl class="row">
+                <dt class="col-sm-4">ID</dt>
+                <dd class="col-sm-8">@Model.IdEmpleado</dd>
+
+                <dt class="col-sm-4">Nombre</dt>
+                <dd class="col-sm-8">@Model.Nombre @Model.Apellido</dd>
+
+                <dt class="col-sm-4">Usuario</dt>
+                <dd class="col-sm-8">@Model.Usuario</dd>
+
+                <dt class="col-sm-4">Rol</dt>
+                <dd class="col-sm-8">@Model.Rol?.Nombre</dd>
+
+                <dt class="col-sm-4">Teléfono</dt>
+                <dd class="col-sm-8">@Model.Telefono</dd>
+
+                <dt class="col-sm-4">Contratación</dt>
+                <dd class="col-sm-8">@Model.FechaContratacion?.ToString("dd/MM/yyyy")</dd>
+
+                <dt class="col-sm-4">Estado</dt>
+                <dd class="col-sm-8">
+                    @if (Model.Estado == "ACTIVO")
+                    {
+                        <span class="badge-estado activo">Activo</span>
+                    }
+                    else
+                    {
+                        <span class="badge-estado inactivo">Inactivo</span>
+                    }
+                </dd>
+            </dl>
+            <a href="/Administrador" class="btn btn-sm btn-outline-secondary">← Volver a administración</a>
+            <a asp-action="Edit" asp-route-id="@Model.IdEmpleado" class="btn btn-editar">Editar</a>
+            @if (Model.Rol?.Nombre != "ADMINISTRADOR")
+            {
+                <a asp-action="Delete" asp-route-id="@Model.IdEmpleado" class="btn btn-eliminar">Eliminar</a>
+            }
+            <a asp-action="Index" class="btn btn-outline-secondary">Volver</a>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

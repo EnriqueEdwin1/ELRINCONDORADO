@@ -1,0 +1,52 @@
+@model ELRINCONDORADO.Models.Categoria
+@{
+    ViewData["Title"] = "Agregar Categoría";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Agregar Categoría</h2>
+            <form asp-action="Create">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <div class="form-group mb-3">
+                    <label asp-for="Nombre" class="form-label">Nombre</label>
+                    <input asp-for="Nombre" class="form-control" required />
+                </div>
+                <div class="form-group mb-4">
+                    <label asp-for="Descripcion" class="form-label">Descripción</label>
+                    <textarea asp-for="Descripcion" class="form-control" rows="2"></textarea>
+                </div>
+                <button type="submit" class="btn btn-guardar">Guardar</button>
+                <a asp-action="Index" class="btn btn-link w-100 mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+@model IEnumerable<ELRINCONDORADO.Models.Insumo>
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Insumos";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                Insumos
+            </h2>
+            <a href="/DestinosInsumos" class="btn btn-outline-secondary">Destinos</a>
+            <a href="/Insumos/Create" class="btn btn-modulo">Agregar insumo</a>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <input type="text" id="buscarInsumo" class="form-control mb-3"
+               placeholder="Buscar insumo por nombre..." />
+
+        <table class="table table-crud" id="tablaInsumos">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Destino</th>
+                    <th>Unidad de Medida</th>
+                    <th>Stock Actual</th>
+                    <th>Stock Mínimo</th>
+                    <th>Costo Unitario</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="fila-clic" data-nombre="@item.Nombre"
+                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdInsumo })';">
+                        <td>@item.IdInsumo</td>
+                        <td>@item.Nombre</td>
+                        <td>
+                            <span class="badge bg-secondary">@(item.Destino?.Nombre ?? "—")</span>
+                        </td>
+                        <td>@item.UnidadMedida</td>
+                        <td>@MonedaHelper.FormatearNumero(item.StockActual) @item.UnidadMedida</td>
+                        <td>@MonedaHelper.FormatearNumero(item.StockMinimo) @item.UnidadMedida</td>
+                        <td>@MonedaHelper.FormatearBs(item.CostoUnitario)</td>
+                        <td>
+                            @if (item.Activo)
+                            {
+                                <span class="badge-estado activo">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge-estado inactivo">Inactivo</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarInsumo');
+            if (!buscar) return;
+            buscar.addEventListener('input', function () {
+                var filtro = buscar.value.toLowerCase();
+                document.querySelectorAll('#tablaInsumos tbody tr').forEach(function (tr) {
+                    var nombre = tr.getAttribute('data-nombre') || '';
+                    tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+@model IEnumerable<ELRINCONDORADO.Models.Proveedor>
+@{
+    ViewData["Title"] = "Proveedores";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏠 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                Proveedores
+            </h2>
+            <a href="/Proveedores/Create" class="btn btn-modulo">Agregar proveedor</a>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <input type="text" id="buscarProveedor" class="form-control mb-3"
+               placeholder="Buscar proveedor por nombre..." />
+
+        <table class="table table-crud" id="tablaProveedores">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Teléfono</th>
+                    <th>Dirección</th>
+                    <th>Email</th>
+                    <th>Observaciones</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="fila-clic" data-nombre="@item.Nombre"
+                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdProveedor })';">
+                        <td>@item.IdProveedor</td>
+                        <td>@item.Nombre</td>
+                        <td>@(string.IsNullOrEmpty(item.Telefono) ? "—" : item.Telefono)</td>
+                        <td>@(string.IsNullOrEmpty(item.Direccion) ? "—" : item.Direccion)</td>
+                        <td>@(string.IsNullOrEmpty(item.Email) ? "—" : item.Email)</td>
+                        <td style="max-width: 180px;">
+                            @if (!string.IsNullOrEmpty(item.Observaciones))
+                            {
+                                <span class="text-truncate d-inline-block" style="max-width: 180px;" title="@item.Observaciones">@item.Observaciones</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.Estado == "ACTIVO")
+                            {
+                                <span class="badge-estado activo">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge-estado inactivo">Inactivo</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarProveedor');
+            if (!buscar) return;
+            buscar.addEventListener('input', function () {
+                var filtro = buscar.value.toLowerCase();
+                document.querySelectorAll('#tablaProveedores tbody tr').forEach(function (tr) {
+                    var nombre = tr.getAttribute('data-nombre') || '';
+                    tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

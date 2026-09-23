@@ -1,0 +1,179 @@
+@model IEnumerable<ELRINCONDORADO.Models.Pedido>
+@{
+    ViewData["Title"] = "Pedidos y Ventas";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var rol = Context.Session.GetString("Rol");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <style>
+        .badge-estado {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-estado.pendiente { background: rgba(255, 193, 7, 0.18); color: #b8860b; }
+        .badge-estado.preparacion { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+        .badge-estado.listo { background: rgba(212, 175, 55, 0.25); color: #a17c00; }
+        .badge-estado.entregado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .badge-estado.cancelado { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+        .badge-estado.completado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .badge-estado.default { background: rgba(108, 117, 125, 0.13); color: #6c757d; }
+        .table-pedidos { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .table-pedidos thead { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; }
+        .table-pedidos thead th { font-weight: 600; border: none; padding: 14px 12px; white-space: nowrap; }
+        .table-pedidos tbody td { vertical-align: middle; padding: 12px; border-top: 1px solid #f0f0f0; }
+        .table-pedidos tbody tr:hover { background-color: rgba(212, 175, 55, 0.08); }
+        .chip-tipo { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .chip-tipo.mesa { background: rgba(212, 175, 55, 0.18); color: #a17c00; }
+        .chip-tipo.llevar { background: rgba(13, 110, 253, 0.10); color: #0d6efd; }
+        .filtro-estado { border-radius: 20px; padding: 6px 14px; border: 1px solid #ced4da; background: white; font-size: 14px; }
+        .filtro-estado:focus { outline: none; border-color: #d4af37; box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                💳 Pedidos
+            </h2>
+            <div class="d-flex gap-2">
+                <a href="/Ventas" class="btn btn-modulo">Ver ventas</a>
+            </div>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+            <input type="text" id="buscarPedido" class="form-control" style="max-width: 300px;"
+                   placeholder="Buscar por cliente o nº..." />
+            <select id="filtroEstado" class="filtro-estado">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="EN PREPARACION">EN PREPARACION</option>
+                <option value="LISTO">LISTO</option>
+                <option value="ENTREGADO">ENTREGADO</option>
+                <option value="CANCELADO">CANCELADO</option>
+            </select>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-pedidos mb-0" id="tablaPedidos">
+                <thead>
+                    <tr>
+                        <th>Nº</th>
+                        <th>Factura</th>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
+                        <th>Atendió</th>
+                        <th>Estado</th>
+                        <th>Pago</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model)
+                    {
+                        var c = item.Estado switch
+                        {
+                            "PENDIENTE" => "pendiente",
+                            "EN PREPARACION" => "preparacion",
+                            "LISTO" => "listo",
+                            "ENTREGADO" => "entregado",
+                            "CANCELADO" => "cancelado",
+                            _ => "default"
+                        };
+                        var cp = item.EstadoPago switch
+                        {
+                            "COMPLETADO" or "PAGADO" => "completado",
+                            "CANCELADO" => "cancelado",
+                            "PENDIENTE" => "pendiente",
+                            _ => "default"
+                        };
+                        var cliente = !string.IsNullOrWhiteSpace(item.NombrePedido)
+                            ? item.NombrePedido
+                            : (!string.IsNullOrWhiteSpace(item.Cliente?.RazonSocial)
+                                ? item.Cliente.RazonSocial
+                                : "—");
+                        <tr>
+                            <td>#@item.IdPedido</td>
+                            <td>@(item.NumeroPedido ?? "—")</td>
+                            <td>@item.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@cliente</td>
+                            <td>
+                                @if (item.TipoPedido == "MESA" && item.Mesa != null)
+                                {
+                                    <span class="chip-tipo mesa">🍽️ Mesa @item.Mesa.Numero</span>
+                                }
+                                else
+                                {
+                                    <span class="chip-tipo llevar">🥡 Para llevar</span>
+                                }
+                            </td>
+                            <td>@item.Empleado?.Nombre @item.Empleado?.Apellido</td>
+                            <td><span class="badge-estado @c">@item.Estado</span></td>
+                            <td><span class="badge-estado @cp">@item.EstadoPago</span></td>
+                            <td class="text-end">$@item.Total.ToString("N0")</td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">Aún no hay pedidos registrados.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarPedido');
+            var filtro = document.getElementById('filtroEstado');
+            function aplicar() {
+                var q = buscar.value.toLowerCase();
+                var f = filtro.value;
+                document.querySelectorAll('#tablaPedidos tbody tr').forEach(function (tr) {
+                    var texto = tr.innerText.toLowerCase();
+                    if (f && !texto.includes(f.toLowerCase())) { tr.style.display = 'none'; return; }
+                    tr.style.display = (q === '' || texto.includes(q)) ? '' : 'none';
+                });
+            }
+            buscar.addEventListener('input', aplicar);
+            filtro.addEventListener('change', aplicar);
+        });
+    </script>
+</body>
+</html>

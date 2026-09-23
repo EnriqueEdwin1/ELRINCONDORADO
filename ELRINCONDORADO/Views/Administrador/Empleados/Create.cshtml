@@ -1,0 +1,154 @@
+@model ELRINCONDORADO.Models.Empleado
+@{
+    ViewData["Title"] = "Agregar Empleado";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/empleados.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Agregar Empleado</h2>
+            <form asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <div class="form-group mb-3">
+                    <label for="IdRol" class="form-label">Rol</label>
+                    <select asp-for="IdRol" class="form-control" asp-items="ViewBag.IdRol" required>
+                        <option value="">Seleccione un rol</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Nombre" class="form-label">Nombre</label>
+                        <input asp-for="Nombre" class="form-control" placeholder="Ej: Carlos" required
+                               pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .-]+"
+                               title="El nombre no puede contener números." />
+                        <small class="text-danger d-none" id="ErrorNombre"></small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Apellido" class="form-label">Apellido</label>
+                        <input asp-for="Apellido" class="form-control" placeholder="Ej: Pérez" required
+                               pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .-]+"
+                               title="El apellido no puede contener números." />
+                        <small class="text-danger d-none" id="ErrorApellido"></small>
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="Usuario" class="form-label">Usuario</label>
+                    <input asp-for="Usuario" class="form-control" required />
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="PasswordHash" class="form-label">Contraseña</label>
+                    <div class="password-input-wrap">
+                        <input type="password" asp-for="PasswordHash" id="PasswordHash" class="form-control" required />
+                        <button type="button" class="password-toggle" data-target="PasswordHash" aria-label="Mostrar u ocultar contraseña">
+                            <svg class="eye-icon eye-open" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            <svg class="eye-icon eye-closed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="Telefono" class="form-label">Teléfono</label>
+                    <input asp-for="Telefono" class="form-control" type="tel" inputmode="tel"
+                           placeholder="Ej: +58 (212) 5551234" required
+                           pattern="[0-9+\-()]{7,20}" maxlength="20"
+                           title="Solo números y los símbolos +, -, ( y )." />
+                    <small class="text-danger d-none" id="ErrorTelefono"></small>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="FechaContratacion" class="form-label">Fecha de contratación</label>
+                    <input asp-for="FechaContratacion" class="form-control" type="date" min="2026-01-01" />
+                    <small class="text-muted">Ej: 2026-09-20 · Solo a partir del año 2026 y sin fechas futuras.</small>
+                </div>
+                <button type="submit" class="btn btn-guardar">Guardar</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/empleados.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            function bloquearNumeros(campo, msj, etiqueta) {
+                if (!campo) return;
+                campo.addEventListener('keydown', function (e) {
+                    if (e.key >= '0' && e.key <= '9') e.preventDefault();
+                });
+                campo.addEventListener('input', function () {
+                    if (/\d/.test(campo.value)) {
+                        campo.setCustomValidity(etiqueta + ' no puede contener números.');
+                        msj.classList.remove('d-none');
+                        msj.textContent = etiqueta + ' no puede contener números.';
+                    } else {
+                        campo.setCustomValidity('');
+                        msj.classList.add('d-none');
+                    }
+                });
+            }
+
+            bloquearNumeros(document.getElementById('Nombre'), document.getElementById('ErrorNombre'), 'El nombre');
+            bloquearNumeros(document.getElementById('Apellido'), document.getElementById('ErrorApellido'), 'El apellido');
+
+            var tel = document.getElementById('Telefono');
+            var msjTel = document.getElementById('ErrorTelefono');
+            if (tel) {
+                tel.addEventListener('keydown', function (e) {
+                    if (e.key.length === 1 && !/[0-9+\-()]/.test(e.key) && !e.ctrlKey && !e.metaKey) e.preventDefault();
+                });
+                tel.addEventListener('input', function () {
+                    tel.value = tel.value.replace(/[^0-9+()\-]/g, '');
+                    var ok = /^[0-9+\-()]{7,20}$/.test(tel.value);
+                    var msg = 'El teléfono debe tener entre 7 y 20 caracteres y solo números, +, -, ( y ).';
+                    if (tel.value.length) {
+                        tel.setCustomValidity(ok ? '' : msg);
+                        msjTel.textContent = ok ? '' : msg;
+                        msjTel.classList.toggle('d-none', ok);
+                    } else {
+                        tel.setCustomValidity('');
+                        msjTel.textContent = '';
+                        msjTel.classList.add('d-none');
+                    }
+                });
+            }
+
+            var fecha = document.getElementById('FechaContratacion');
+            if (fecha) {
+                var hoy = new Date();
+                var ymd = hoy.getFullYear() + '-' +
+                          String(hoy.getMonth() + 1).padStart(2, '0') + '-' +
+                          String(hoy.getDate()).padStart(2, '0');
+                fecha.max = ymd;
+                fecha.addEventListener('change', function () {
+                    var v = fecha.value;
+                    var ok = !v || (v >= '2026-01-01' && v <= ymd);
+                    fecha.setCustomValidity(ok ? '' : 'La fecha debe ser del 2026 en adelante y no puede ser futura.');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

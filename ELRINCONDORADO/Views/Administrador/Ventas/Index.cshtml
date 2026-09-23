@@ -1,0 +1,134 @@
+@model IEnumerable<ELRINCONDORADO.Models.Venta>
+@{
+    ViewData["Title"] = "Pedidos y Ventas";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var rol = Context.Session.GetString("Rol");
+    var totalVentas = Model.Sum(v => v.Total);
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <style>
+        .badge-estado {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-estado.pendiente { background: rgba(255, 193, 7, 0.18); color: #b8860b; }
+        .badge-estado.completado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .badge-estado.cancelado { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+        .badge-estado.default { background: rgba(108, 117, 125, 0.13); color: #6c757d; }
+        .table-ventas { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .table-ventas thead { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; }
+        .table-ventas thead th { font-weight: 600; border: none; padding: 14px 12px; white-space: nowrap; }
+        .table-ventas tbody td { vertical-align: middle; padding: 12px; border-top: 1px solid #f0f0f0; }
+        .table-ventas tbody tr:hover { background-color: rgba(212, 175, 55, 0.08); }
+        .chip-tipo { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .chip-tipo.mesa { background: rgba(212, 175, 55, 0.18); color: #a17c00; }
+        .chip-tipo.llevar { background: rgba(13, 110, 253, 0.10); color: #0d6efd; }
+        .filtro-estado { border-radius: 20px; padding: 6px 14px; border: 1px solid #ced4da; background: white; font-size: 14px; }
+        .filtro-estado:focus { outline: none; border-color: #d4af37; box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2); }
+        .resumen-ventas { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; border-radius: 12px; padding: 18px 24px; box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25); }
+        .resumen-ventas .valor { font-size: 26px; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                💳 Ventas
+            </h2>
+            <div class="d-flex gap-2">
+                <a href="/Pedidos" class="btn btn-modulo">Ver pedidos</a>
+            </div>
+        </div>
+
+        <div class="resumen-ventas d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <div class="text-uppercase small opacity-75">Ventas registradas</div>
+                <div class="valor">@Model.Count()</div>
+            </div>
+            <div class="text-end">
+                <div class="text-uppercase small opacity-75">Total ingresos</div>
+                <div class="valor">$@totalVentas.ToString("N0")</div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-ventas mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Fecha</th>
+                        <th>Mesa</th>
+                        <th>Atendió</th>
+                        <th>Pago</th>
+                        <th>Estado</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model)
+                    {
+                        var c = item.Estado switch
+                        {
+                            "COMPLETADO" or "PAGADO" or "COBRADO" or "PAGADA" => "completado",
+                            "CANCELADO" => "cancelado",
+                            "PENDIENTE" => "pendiente",
+                            _ => "default"
+                        };
+                        <tr>
+                            <td>@item.IdVenta</td>
+                            <td>@item.FechaVenta.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                @if (item.Mesa != null)
+                                {
+                                    <span class="chip-tipo mesa">🍽️ Mesa @item.Mesa.Numero</span>
+                                }
+                                else
+                                {
+                                    <span class="chip-tipo llevar">🥡 Para llevar</span>
+                                }
+                            </td>
+                            <td>@item.Empleado?.Nombre @item.Empleado?.Apellido</td>
+                            <td>@item.MetodoPago</td>
+                            <td><span class="badge-estado @c">@item.Estado</span></td>
+                            <td class="text-end">$@item.Total.ToString("N0")</td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">Aún no hay ventas registradas.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

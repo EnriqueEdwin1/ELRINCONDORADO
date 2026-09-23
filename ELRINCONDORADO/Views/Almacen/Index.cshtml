@@ -1,0 +1,169 @@
+@{
+    ViewData["Title"] = "Panel de Almacén";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var rol = Context.Session.GetString("Rol");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 20px;
+            color: white !important;
+        }
+
+        .btn-logout {
+            background: white;
+            color: #d4af37;
+            border: none;
+            font-weight: 600;
+            padding: 6px 16px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-logout:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+            color: white;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            font-weight: 600;
+        }
+
+        .welcome-card {
+            background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.3);
+        }
+
+        .welcome-card h2 {
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .welcome-card p {
+            margin: 5px 0;
+            opacity: 0.9;
+        }
+
+        .container-custom {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 15px;
+        }
+
+        .btn-modulo {
+            background: #d4af37;
+            color: white;
+            font-weight: 600;
+        }
+
+        .btn-modulo:hover {
+            background: #b8941e;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="welcome-card">
+            <h2>¡Bienvenido, @nombre!</h2>
+            <p>Rol: <strong>@rol</strong></p>
+            <p>Hora de acceso: <strong>@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</strong></p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">📦 Insumos</div>
+                    <div class="card-body">
+                        <p>Gestionar stock de insumos.</p>
+                        <a href="/Insumos" class="btn btn-sm btn-modulo">Ver insumos</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🚚 Proveedores</div>
+                    <div class="card-body">
+                        <p>Directorio de proveedores.</p>
+                        <a href="/Proveedores" class="btn btn-sm btn-modulo">Ver proveedores</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🛒 Compras</div>
+                    <div class="card-body">
+                        <p>Registrar compras a proveedores.</p>
+                        <a href="/Compras" class="btn btn-sm btn-modulo">Ver compras</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">📊 Movimientos</div>
+                    <div class="card-body">
+                        <p>Historial de entradas y salidas.</p>
+                        <a href="/MovimientosInventario" class="btn btn-sm btn-modulo">Ver movimientos</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

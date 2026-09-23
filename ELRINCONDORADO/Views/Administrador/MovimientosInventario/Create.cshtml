@@ -1,0 +1,81 @@
+@model ELRINCONDORADO.Models.MovimientoInventario
+@{
+    ViewData["Title"] = "Registrar Salida de Insumo";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Registrar Salida de Insumo</h2>
+            <p class="text-muted">Aquí se registran todas las <strong>salidas</strong> de insumos del inventario.</p>
+            <form asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <input type="hidden" asp-for="TipoMovimiento" value="Salida" />
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="IdInsumo" class="form-label">Insumo</label>
+                        <select asp-for="IdInsumo" class="form-control" asp-items="ViewBag.IdInsumo">
+                            <option value="">Seleccionar insumo...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="IdEmpleado" class="form-label">Empleado que retira</label>
+                        <select asp-for="IdEmpleado" class="form-control" asp-items="ViewBag.IdEmpleado">
+                            <option value="">Seleccionar empleado...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Cantidad" class="form-label">Cantidad</label>
+                        <input asp-for="Cantidad" class="form-control" type="number" step="0.01" min="0" placeholder="Ej: 2" required />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Fecha" class="form-label">Fecha</label>
+                        <input asp-for="Fecha" class="form-control" type="datetime-local" value="@Model.Fecha.ToString("yyyy-MM-ddTHH:mm")" required />
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Motivo" class="form-label">Motivo de la salida</label>
+                    <input asp-for="Motivo" class="form-control" type="text" maxlength="100"
+                           placeholder="Ej: Preparación de receta, reposición de mesa, merma..." required />
+                </div>
+
+                <button type="submit" class="btn btn-guardar">Registrar salida</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

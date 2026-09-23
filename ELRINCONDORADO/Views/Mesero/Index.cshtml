@@ -1,0 +1,208 @@
+@using ELRINCONDORADO.Models
+@model IEnumerable<Pedido>
+
+@{
+    ViewData["Title"] = "Entregas - Mesero";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var hayPedidos = Model != null && Model.Any();
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        :root {
+            --dorado: #d4af37;
+            --dorado-oscuro: #b8941e;
+            --marron: #3e2723;
+            --verde: #2e9e44;
+        }
+        body {
+            background: #f7f5ef;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #3e2723 0%, #6b3a2a 100%);
+            box-shadow: 0 4px 14px rgba(62, 39, 35, 0.35);
+        }
+        .navbar-brand { font-weight: 800; font-size: 20px; color: #fff !important; letter-spacing: .5px; }
+        .navbar-brand span { color: var(--dorado); }
+        .btn-logout {
+            background: var(--dorado); color: #fff; border: none; font-weight: 600;
+            padding: 6px 18px; border-radius: 8px; transition: all .25s ease;
+        }
+        .btn-logout:hover { background: var(--dorado-oscuro); transform: translateY(-2px); }
+        .container-custom { max-width: 1300px; margin: 0 auto; padding: 28px 15px; }
+        .titulo-panel { font-weight: 800; color: var(--marron); display: flex; align-items: center; gap: 10px; }
+        .titulo-panel small { color: #9c8b73; font-weight: 600; }
+        .badge-cola { background: #f2e7c9; color: var(--marron); font-weight: 700; padding: 6px 14px; border-radius: 20px; }
+        .vacio-cocina {
+            text-align: center; padding: 70px 20px; color: #9c8b73;
+            border: 2px dashed #d9c9a3; border-radius: 16px; background: #fff;
+        }
+        .vacio-cocina .emblema { font-size: 56px; }
+        .pedido-card {
+            background: #fff; border-radius: 14px; box-shadow: 0 3px 12px rgba(0,0,0,.06);
+            border-left: 6px solid var(--verde); margin-bottom: 18px; overflow: hidden;
+        }
+        .pedido-head {
+            border-bottom: 1px solid #f0ead9; padding: 12px 18px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+        }
+        .pedido-num { font-weight: 800; color: var(--marron); font-size: 16px; }
+        .pedido-cliente { color: #7a6a52; font-size: 13px; }
+        .chip-tipo {
+            display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 700; vertical-align: middle;
+        }
+        .pedido-body { padding: 14px 18px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .detalle-productos { flex: 1 1 320px; }
+        .prod-linea {
+            display: flex; justify-content: space-between; padding: 7px 0;
+            border-bottom: 1px dashed #eee5d0;
+        }
+        .prod-linea:last-child { border-bottom: none; }
+        .prod-cant { font-weight: 800; color: var(--dorado-oscuro); margin-right: 14px; }
+        .prod-nombre { font-weight: 600; color: var(--marron); }
+        .prod-meta { font-size: 12px; color: #a89a80; }
+        .pedido-acciones { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+        .btn-mesero {
+            border: none; color: #fff; font-weight: 700; padding: 10px 16px; border-radius: 8px;
+            min-width: 180px; transition: all .25s ease;
+        }
+        .btn-entregar { background: linear-gradient(135deg, #2e9e44, #1e7d34); }
+        .btn-mesero:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 6px 14px rgba(0,0,0,.15); }
+        .pie-tiempo { font-size: 13px; color: #9c8b73; padding: 10px 18px; border-top: 1px solid #f0ead9; background: #fdfbf5; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Mesero">🛎️ El Rincón Dorado · <span>Mesero</span></a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white-50 me-2">👤 @(nombre ?? "Mesero")</span>
+                <form method="post" action="/Auth/Logout">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h3 class="titulo-panel mb-0">
+                🛎️ Pedidos listos para servir <small>· listos de cocina</small>
+            </h3>
+            <a href="/Mesero/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorListos">@(hayPedidos ? Model.Count() : 0)</span> para entregar</a>
+        </div>
+
+        @if (TempData["Exito"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Exito"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (!hayPedidos)
+        {
+            <div class="vacio-cocina">
+                <div class="emblema">🛎️</div>
+                <h4 class="mt-3 mb-1">No hay pedidos pendientes de servir</h4>
+                <p class="mb-0">Cuando cocina marque un pedido como LISTO, aparecerá aquí para llevarlo a la mesa.</p>
+            </div>
+        }
+        else
+        {
+            <div class="row">
+                @foreach (var pedido in Model)
+                {
+                    var detalle = pedido.DetallesPedidos ?? Enumerable.Empty<DetallePedido>();
+
+                    <div class="col-12 col-lg-6">
+                        <div class="pedido-card">
+                            <div class="pedido-head">
+                                <div>
+                                    <div class="pedido-num">🍽️ Pedido #@pedido.IdPedido
+                                        @if (pedido.TipoPedido == "MESA")
+                                        {
+                                            <span class="chip-tipo" style="@(pedido.Mesa != null ? "background:#e8f0e8;color:#2e6b1e;" : "background:#eef0f5;color:#3d5a80;")">🍽️ Mesa @(pedido.Mesa?.Numero ?? 0)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="chip-tipo" style="background:#f5ecd3;color:#8a6d1a;">🥡 Para llevar</span>
+                                        }
+                                    </div>
+                                    <div class="pedido-cliente">
+                                        👤 @(string.IsNullOrWhiteSpace(pedido.NombrePedido) ? "Cliente" : pedido.NombrePedido)
+                                        @if (!string.IsNullOrWhiteSpace(pedido.Empleado?.Nombre))
+                                        {
+                                            <span> · Cajero: @pedido.Empleado.Nombre @pedido.Empleado.Apellido</span>
+                                        }
+                                    </div>
+                                </div>
+                                <span class="chip-tipo" style="background:linear-gradient(135deg,#27ae60,#1e8449); color:#fff;">✅ LISTO</span>
+                            </div>
+                            <div class="pedido-body">
+                                <div class="detalle-productos">
+                                    @foreach (var d in detalle)
+                                    {
+                                        <div class="prod-linea">
+                                            <div>
+                                                <span class="prod-cant">@d.Cantidad ×</span>
+                                                <span class="prod-nombre">@(d.Producto?.Nombre ?? "Producto")</span>
+                                                @if (!string.IsNullOrWhiteSpace(d.Observacion))
+                                                {
+                                                    <div class="prod-meta">📝 @d.Observacion</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="pedido-acciones">
+                                    <form method="post" action="/Mesero/Entregar">
+                                        <input type="hidden" name="id" value="@pedido.IdPedido" />
+                                        @Html.AntiForgeryToken()
+                                        @if (pedido.TipoPedido == "MESA")
+                                        {
+                                            <button type="submit" class="btn-mesero btn-entregar w-100">🍽️ Llevar a la mesa</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="btn-mesero btn-entregar w-100">✅ Entregar pedido</button>
+                                        }
+                                    </form>
+                                </div>
+                            </div>
+                            <div class="pie-tiempo">
+                                ⏱️ Listo desde: @pedido.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                @if (pedido.EstadoPago == "EFECTIVO")
+                                {
+                                    <span class="ms-2">· 💵 Pago en efectivo</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Refresco automático cada 20s para ver los nuevos pedidos listos de cocina
+        setTimeout(() => window.location.href = '/Mesero/Index', 20000);
+    </script>
+</body>
+</html>

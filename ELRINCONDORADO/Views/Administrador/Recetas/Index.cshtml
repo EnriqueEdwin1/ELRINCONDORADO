@@ -1,0 +1,105 @@
+@model IEnumerable<ELRINCONDORADO.Models.Receta>
+@{
+    ViewData["Title"] = "Recetas";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                Recetas
+            </h2>
+            <a asp-action="Create" class="btn btn-modulo">+ Agregar receta</a>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["Mensaje"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Mensaje"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <input type="text" id="buscarReceta" class="form-control mb-3"
+               placeholder="Buscar receta por producto..." />
+
+        <table class="table table-crud" id="tablaRecetas">
+            <thead>
+                <tr>
+                    <th>Nº</th>
+                    <th>Producto</th>
+                    <th>Descripción</th>
+                    <th>Insumos</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="fila-clic" data-producto="@item.Producto?.Nombre"
+                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdReceta })';">
+                        <td>@item.IdReceta.ToString("D4")</td>
+                        <td>@item.Producto?.Nombre</td>
+                        <td style="max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                            title="@(item.Descripcion)">@(string.IsNullOrEmpty(item.Descripcion) ? "—" : item.Descripcion)</td>
+                        <td>@(item.DetalleRecetas?.Count ?? 0)</td>
+                        <td>
+                            <span class="badge-estado @(item.Activo ? "activo" : "inactivo")">
+                                @(item.Activo ? "ACTIVA" : "INACTIVA")
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarReceta');
+            if (!buscar) return;
+            buscar.addEventListener('input', function () {
+                var filtro = buscar.value.toLowerCase();
+                document.querySelectorAll('#tablaRecetas tbody tr').forEach(function (tr) {
+                    var nombre = tr.getAttribute('data-producto') || '';
+                    tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

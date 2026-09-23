@@ -1,0 +1,626 @@
+@model ELRINCONDORADO.Models.CajeroIndexViewModel
+@using ELRINCONDORADO.Models
+@using ELRINCONDORADO.Helpers
+@using System.Globalization
+@using Microsoft.AspNetCore.Http
+@functions {
+    string NombreBonito(string nombre) => string.Join(" ", nombre.Split('_').Select(p => p.Length == 0 ? "" : char.ToUpper(p[0]) + p.Substring(1).ToLowerInvariant()));
+    string NombreMinuscula(string nombre) => NombreBonito(nombre).ToLowerInvariant();
+}
+@{
+    ViewData["Title"] = "Punto de Ventas – Cajero";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var categorias = Model.Categorias;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] – El Rincón Dorado</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <style>
+        :root { --dorado: #d4af37; --dorado-oscuro: #b8941e; }
+        body {
+            background: #fbf9f2;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* ===== BARRA SUPERIOR ===== */
+        .navbar {
+            background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+            box-shadow: 0 4px 14px rgba(212, 175, 55, .3);
+        }
+        .navbar-brand { font-weight: 800; color: #fff; font-size: 19px; }
+        .nombre-user { color: #fff; font-weight: 600; }
+        .btn-logout {
+            background: #fff; color: #b8941e; border: none; font-weight: 700;
+            border-radius: 8px; padding: 6px 16px; transition: all .3s ease;
+        }
+        .btn-logout:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(255,255,255,.25); }
+
+        /* ===== MENÚ HORIZONTAL DE CATEGORÍAS ===== */
+        .menu-categorias {
+            display: flex; gap: 10px; overflow-x: auto; padding: 12px 22px;
+            background: #fff; border-bottom: 2px solid #f0ead2; position: sticky; top: 56px;
+            z-index: 900; white-space: nowrap; scrollbar-width: thin;
+        }
+        .menu-categorias::-webkit-scrollbar { height: 6px; }
+        .menu-categorias::-webkit-scrollbar-thumb { background: var(--dorado); border-radius: 8px; }
+        .chip-categoria {
+            background: #fff; border: 2px solid #e8ddaa; border-radius: 30px; padding: 7px 22px;
+            font-weight: 600; color: #7a6a1f; cursor: pointer; transition: all .25s ease; flex-shrink: 0;
+        }
+        .chip-categoria:hover { border-color: var(--dorado); transform: translateY(-2px); }
+        .chip-categoria.activa {
+            background: linear-gradient(135deg, #d4af37, #b8941e); border-color: var(--dorado);
+            color: #fff; box-shadow: 0 6px 16px rgba(212,175,55,.4);
+        }
+
+        /* ===== GRID DE PRODUCTOS: foto GRANDE + información ===== */
+        .grupo-productos { padding: 14px 22px; }
+        .producto-card {
+            background: #fff; border-radius: 14px; overflow: hidden; height: 100%;
+            box-shadow: 0 6px 18px rgba(0,0,0,.06); transition: all .3s ease; display: flex; flex-direction: column;
+        }
+        .producto-card:hover { transform: translateY(-4px); box-shadow: 0 12px 26px rgba(212,175,55,.3); }
+        .producto-img { width: 100%; height: 200px; object-fit: cover; background: #eee; }
+        .producto-img-ph {
+            width: 100%; height: 200px; background: #f4ecd3; display: flex; align-items: center;
+            justify-content: center; font-size: 56px;
+        }
+        .producto-info { padding: 14px; display: flex; flex-direction: column; flex-grow: 1; }
+        .badge-cat {
+            background: #f6efd8; color: #b8941e; font-size: 11px; font-weight: 700;
+            padding: 2px 12px; border-radius: 20px; align-self: flex-start;
+        }
+        .producto-nombre { font-weight: 700; font-size: 17px; color: #333; margin-top: 6px; }
+        .producto-desc { font-size: 13px; color: #888; flex-grow: 1; margin-top: 4px; }
+        .producto-precio { font-weight: 800; color: var(--dorado-oscuro); font-size: 19px; margin-top: 6px; }
+        .btn-agregar {
+            background: #fff; border: 2px solid var(--dorado); color: var(--dorado-oscuro);
+            font-weight: 700; border-radius: 8px; padding: 7px; margin-top: 10px; width: 100%;
+            transition: all .25s ease;
+        }
+        .btn-agregar:hover { background: var(--dorado); color: #fff; }
+        .sin-productos {
+            background: #fff; border: 2px dashed #e8ddaa; border-radius: 14px; color: #b9a86a;
+            text-align: center; padding: 40px 20px; font-size: 17px; font-weight: 600;
+        }
+
+        /* ===== TARJETA DE PROMOCIÓN ===== */
+        .promo-card {
+            background: linear-gradient(135deg, #fff 0%, #fbf3d9 100%); border: 2px solid var(--dorado);
+            border-radius: 14px; overflow: hidden; height: 100%; box-shadow: 0 6px 18px rgba(212,175,55,.2);
+            display: flex; flex-direction: column;
+        }
+        .promo-head {
+            background: linear-gradient(135deg, #d4af37, #b8941e); color: #fff;
+            font-weight: 800; font-size: 16px; padding: 12px 16px;
+        }
+        .promo-body { padding: 14px; display: flex; flex-direction: column; flex-grow: 1; }
+        .promo-desc { font-size: 13px; color: #888; flex-grow: 1; }
+        .promo-items { margin-top: 10px; font-size: 12px; color: #555; }
+        .promo-items strong { color: var(--dorado-oscuro); }
+        .promo-precio { font-weight: 800; color: var(--dorado-oscuro); font-size: 18px; margin-top: 8px; }
+        .badge-promo {
+            background: var(--dorado); color: #fff; font-size: 11px; font-weight: 700;
+            padding: 2px 10px; border-radius: 20px;
+        }
+
+        /* ===== BOTÓN FLOTANTE DEL CARRITO ===== */
+        .btn-carrito-flotante {
+            position: fixed; bottom: 24px; right: 24px; z-index: 1100;
+            background: linear-gradient(135deg, #d4af37, #b8941e); color: #fff; border: none;
+            font-weight: 800; font-size: 16px; border-radius: 40px;
+            padding: 14px 22px; box-shadow: 0 10px 24px rgba(212,175,55,.5); cursor: pointer;
+            transition: all .25s ease; display: flex; align-items: center; gap: 8px;
+        }
+        .btn-carrito-flotante:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(212,175,55,.6); }
+        .badge-carrito {
+            background: #fff; color: var(--dorado-oscuro); border-radius: 20px;
+            font-size: 13px; font-weight: 800; padding: 3px 10px; min-width: 28px; text-align: center;
+        }
+
+        /* ===== OVERLAY + PANEL DESLIZANTE DEL CARRITO ===== */
+        .carrito-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1040;
+            opacity: 0; visibility: hidden; transition: all .3s ease;
+        }
+        .carrito-overlay.abierto { opacity: 1; visibility: visible; }
+        .carrito-drawer {
+            position: fixed; top: 0; right: -420px; width: 100%; max-width: 400px; height: 100%;
+            background: #fff; z-index: 1050; box-shadow: -10px 0 30px rgba(0,0,0,.2);
+            display: flex; flex-direction: column; transition: right .3s ease;
+        }
+        .carrito-drawer.abierto { right: 0; }
+        .carrito-head {
+            background: linear-gradient(135deg, #d4af37, #b8941e); color: #fff;
+            padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
+            font-weight: 800; font-size: 17px;
+        }
+        .carrito-cerrar {
+            background: rgba(255,255,255,.2); color: #fff; border: none; border-radius: 50%;
+            width: 30px; height: 30px; font-size: 14px; font-weight: 700; line-height: 1;
+        }
+        .carrito-cuantos { font-size: 13px; font-weight: 600; opacity: .9; }
+        .carrito-body { padding: 14px 18px; overflow-y: auto; flex-grow: 1; }
+        .carrito-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px dashed #f0e9d2; font-size: 14px;
+        }
+        .carrito-item:last-child { border-bottom: none; }
+        .c-nombre { font-weight: 600; }
+        .c-controles { display: flex; align-items: center; gap: 7px; }
+        .btn-cant {
+            width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--dorado);
+            background: #fff; color: var(--dorado-oscuro); font-weight: 700; line-height: 1; padding: 0;
+        }
+        .btn-cant:hover { background: var(--dorado); color: #fff; }
+        .btn-eliminar {
+            border: 1.5px solid #e5c9a0; color: #c0392b; background: #fff; border-radius: 6px;
+            font-size: 12px; font-weight: 700; padding: 3px 8px;
+        }
+        .btn-eliminar:hover { background: #c0392b; color: #fff; }
+        .c-subtotal { font-weight: 700; color: var(--dorado-oscuro); min-width: 74px; text-align: right; }
+        .carrito-vacio { color: #aaa; text-align: center; padding: 30px 10px; }
+
+        /* ===== PIE DEL CARRITO (solo lo necesario para facturar) ===== */
+        .carrito-foot { padding: 14px 18px; border-top: 2px solid #f0ead2; background: #fffdf6; }
+        .carrito-foot input, .carrito-foot select {
+            border: 1.5px solid #e6ddaa; border-radius: 8px; font-size: 13px; padding: 7px 10px; width: 100%;
+        }
+        .carrito-foot input:focus, .carrito-foot select:focus { border-color: var(--dorado); box-shadow: none; }
+        .carrito-foot input:disabled { background: #f0ead2; color: #7a6a25; cursor: not-allowed; }
+        .carrito-total { font-size: 20px; font-weight: 800; color: var(--dorado-oscuro); }
+        .btn-facturar {
+            background: linear-gradient(135deg, #d4af37, #b8941e); border: none; color: #fff;
+            font-weight: 800; border-radius: 10px; padding: 10px 22px; width: 100%;
+            transition: all .25s ease; font-size: 15px;
+        }
+        .btn-facturar:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(212,175,55,.4); }
+        .btn-buscar {
+            background: #fff; border: 2px solid var(--dorado); color: var(--dorado-oscuro);
+            font-weight: 700; border-radius: 8px; padding: 7px 12px; width: 100%; font-size: 13px;
+            transition: all .25s ease;
+        }
+        .btn-buscar:hover { background: var(--dorado); color: #fff; }
+        .lbl-nit { font-size: 12px; font-weight: 700; color: var(--dorado-oscuro); }
+
+        /* ===== NOTIFICACIÓN TEMPORAL (toast) ===== */
+        .carrito-toast {
+            position: fixed; top: 70px; right: 20px; z-index: 1300;
+            min-width: 260px; max-width: 360px; padding: 12px 18px; border-radius: 12px;
+            color: #fff; font-weight: 600; font-size: 14px;
+            box-shadow: 0 10px 24px rgba(0,0,0,.25);
+            opacity: 0; transform: translateX(40px); transition: all .35s ease;
+            pointer-events: none;
+        }
+        .carrito-toast.mostrar { opacity: 1; transform: translateX(0); }
+        .carrito-toast.ok { background: linear-gradient(135deg, #2e9e44, #1e7d34); }
+        .carrito-toast.error { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+        .carrito-toast.info { background: linear-gradient(135deg, #d4af37, #b8941e); }
+
+        /* ===== MODAL CIERRE DE CAJA ===== */
+        .btn-cierre {
+            background: linear-gradient(135deg, #d4af37, #b8941e); border: none; color: #fff;
+            font-weight: 800; border-radius: 8px; padding: 8px 18px; transition: all .25s ease;
+        }
+        .btn-cierre:hover { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(212,175,55,.4); color:#fff; }
+        .btn-cancelar {
+            background: #fff; color: #6c757d; font-weight: 700; border-radius: 8px;
+            border: 1px solid #ced4da; padding: 8px 18px;
+        }
+        .btn-cancelar:hover { background: #f0f0f0; color: #333; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Cajero">🍗 El Rincón Dorado · Cajero</a>
+            <div class="ms-auto d-flex align-items-center gap-3">
+                <span class="nombre-user">👤 @(nombre ?? "Cajero")</span>
+                <button type="button" class="btn btn-logout btn-sm" data-bs-toggle="modal" data-bs-target="#modalCierreCaja">🧾 Cierre de caja</button>
+                <form method="post" action="/Auth/Logout">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show position-fixed"
+             style="top:70px; right:20px; z-index:1300; max-width:360px; box-shadow:0 10px 24px rgba(0,0,0,.25);">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- ===== MODAL CIERRE DE CAJA (requiere contraseña del administrador) ===== -->
+    <div class="modal fade" id="modalCierreCaja" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="post" action="/Cajero/CierreCaja" class="modal-content" style="border-radius:14px; border:none;">
+                @Html.AntiForgeryToken()
+                <div class="modal-header" style="background:linear-gradient(135deg,#d4af37,#b8941e); color:#fff; border-radius:14px 14px 0 0;">
+                    <h5 class="modal-title">🧾 Cierre de caja</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body" style="padding:20px 22px;">
+                    <p style="font-size:14px; color:#555; margin-bottom:12px;">
+                        Operación autorizada. Para confirmar el cierre ingrese la
+                        <strong>contraseña del administrador</strong>. Se generará el reporte de las
+                        ventas del día y las facturas siguientes reiniciarán en el número <strong>0001</strong>.
+                    </p>
+                    <label for="passwordAdmin" class="form-label" style="font-weight:600; font-size:13px;">Contraseña del administrador</label>
+                    <input type="password" id="passwordAdmin" name="passwordAdmin" class="form-control"
+                           placeholder="••••••••" required autocomplete="off" />
+                </div>
+                <div class="modal-footer" style="border-top:1px solid #f0ead2; padding:12px 22px;">
+                    <button type="button" class="btn btn-cancelar" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-cierre">Confirmar cierre</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MENÚ HORIZONTAL DE CATEGORÍAS (todas las de la BD + promociones) ===== -->
+    <div class="menu-categorias" id="menuCategorias">
+        @for (var i = 0; i < categorias.Count; i++)
+        {
+            var categoria = categorias[i];
+            <button type="button" class="chip-categoria @(i == 0 ? "activa" : "")"
+                    title="@categoria.Descripcion"
+                    onclick="seleccionarGrupo('grupo-@categoria.IdCategoria', this)">
+                @NombreBonito(categoria.Nombre)
+            </button>
+        }
+        <button type="button" class="chip-categoria" onclick="seleccionarGrupo('grupo-promo', this)">
+            🎁 Promociones
+        </button>
+    </div>
+
+    <!-- ===== GRID DE PRODUCTOS POR CATEGORÍA ===== -->
+    @for (var i = 0; i < categorias.Count; i++)
+    {
+        var categoria = categorias[i];
+        var productos = categoria.Productos != null
+            ? categoria.Productos.ToList()
+            : new List<Producto>();
+        var esPrimera = i == 0;
+
+        <div class="grupo-productos" id="grupo-@categoria.IdCategoria" style="@(esPrimera ? "" : "display:none;")">
+            @if (productos.Count == 0)
+            {
+                <div class="sin-productos">🚫 No hay @NombreMinuscula(categoria.Nombre) disponibles.</div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var producto in productos)
+                    {
+                        var nombreJs = producto.Nombre.Replace("'", "’");
+                        <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+                            <div class="producto-card">
+                                @if (!string.IsNullOrEmpty(producto.ImagenUrl))
+                                {
+                                    <img src="@producto.ImagenUrl" class="producto-img" alt="@producto.Nombre" />
+                                }
+                                else
+                                {
+                                    <div class="producto-img-ph">🍽️</div>
+                                }
+                                <div class="producto-info">
+                                    <span class="badge-cat">@NombreBonito(categoria.Nombre)</span>
+                                    <div class="producto-nombre">@producto.Nombre</div>
+                                    <div class="producto-desc">@(string.IsNullOrEmpty(producto.Descripcion) ? "Delicioso plato de nuestra casa." : producto.Descripcion)</div>
+                                    <div class="producto-precio">@MonedaHelper.FormatearBs(producto.Precio)</div>
+                                    <button type="button" class="btn btn-agregar"
+                                            onclick="agregar(@producto.IdProducto, '@nombreJs', @producto.Precio.ToString(CultureInfo.InvariantCulture))">
+                                        🛒 Agregar al carrito
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- ===== PROMOCIONES (vinculadas a la tabla promociones) ===== -->
+    <div class="grupo-productos" id="grupo-promo" style="display:none;">
+        @if (Model.Promociones.Count == 0)
+        {
+            <div class="sin-productos">🚫 No hay promociones disponibles.</div>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var promo in Model.Promociones)
+                {
+                    <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+                        <div class="promo-card">
+                            <div class="promo-head">
+                                🎁 @promo.Nombre
+                            </div>
+                            <div class="promo-body">
+                                <span class="badge-promo align-self-start">PROMOCIÓN</span>
+                                <div class="promo-desc mt-2">
+                                    @(string.IsNullOrEmpty(promo.Descripcion) ? "Promoción especial del día." : promo.Descripcion)
+                                </div>
+                                @if (promo.DetallePromociones != null && promo.DetallePromociones.Count > 0)
+                                {
+                                    <div class="promo-items">
+                                        <strong>Incluye:</strong>
+                                        @(string.Join(" · ", promo.DetallePromociones.Select(d => d.Producto?.Nombre + " x" + d.Cantidad).Where(n => !string.IsNullOrEmpty(n))))
+                                    </div>
+                                }
+                                <div class="promo-precio">@MonedaHelper.FormatearBs(promo.Valor)</div>
+                                <button type="button" class="btn btn-agregar"
+                                        onclick="mostrarToast('La selección de promociones se habilitará en el siguiente paso.', 'info')">
+                                    Agregar promoción
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @Html.AntiForgeryToken()
+
+    <!-- ===== BOTÓN FLOTANTE CARRITO ===== -->
+    <button type="button" class="btn-carrito-flotante" id="btnCarritoFlotante" onclick="toggleCarrito(true)">
+        🛒 Carrito
+        <span class="badge-carrito" id="btnCarritoCount">0</span>
+        <span id="btnCarritoTotal">Bs 0,00</span>
+    </button>
+
+    <!-- ===== OVERLAY + PANEL DESLIZANTE (almacenamiento temporal) ===== -->
+    <div class="carrito-overlay" id="carritoOverlay" onclick="toggleCarrito(false)"></div>
+    <aside class="carrito-drawer" id="carritoDrawer">
+        <div class="carrito-head">
+            <span>🛒 Carrito del pedido</span>
+            <button type="button" class="carrito-cerrar" onclick="toggleCarrito(false)">✕</button>
+        </div>
+        <div class="carrito-body" id="carritoBody"></div>
+        <div class="carrito-foot">
+            <input type="text" id="nombrePedido" placeholder="Nombre del pedido / cliente *"
+                   class="mb-2" oninput="this.value = this.value.toUpperCase()" />
+
+            <div class="lbl-nit mb-1">NIT / CI del cliente</div>
+            <div class="row g-2 mb-2">
+                <div class="col-8">
+                    <input type="text" id="nit" placeholder="Ingrese el NIT y busque"
+                       onkeydown="if (event.key === 'Enter') { event.preventDefault(); buscarCliente(); }" />
+                </div>
+                <div class="col-4">
+                    <button type="button" class="btn btn-buscar" onclick="buscarCliente()">🔍 Buscar</button>
+                </div>
+            </div>
+            <div id="razonWrapper" style="display:none;" class="mb-3">
+                <div class="lbl-nit mb-1">Razón social</div>
+                <input type="text" id="razonSocial" placeholder="Razón social del cliente" />
+            </div>
+
+            <div id="tipoPedidoWrapper" class="mb-2">
+                <div class="lbl-nit mb-1">Tipo de pedido</div>
+                <select id="tipoPedido" aria-label="Tipo de pedido" onchange="cambiarTipoPedido()">
+                    <option value="PARA_LLEVAR">🥡 Para llevar</option>
+                    <option value="MESA">🍽️ Para la mesa</option>
+                </select>
+            </div>
+            <div id="mesaWrapper" style="display:none;" class="mb-2">
+                <div class="lbl-nit mb-1">Número de mesa</div>
+                <select id="idMesa" aria-label="Mesa">
+                    @foreach (var mesa in Model.Mesas)
+                    {
+                        <option value="@mesa.IdMesa">Mesa @mesa.Numero</option>
+                    }
+                    @if (Model.Mesas.Count == 0)
+                    {
+                        <option value="">No hay mesas disponibles</option>
+                    }
+                </select>
+            </div>
+
+            <select id="metodoPago" class="mb-3" aria-label="Método de pago">
+                <option value="EFECTIVO">💵 Efectivo</option>
+                <option value="TARJETA">💳 Tarjeta</option>
+                <option value="QR">📱 QR</option>
+            </select>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="carrito-cuantos" id="carritoResumen">0 productos</span>
+                <span class="carrito-total" id="carritoTotal">Bs 0,00</span>
+            </div>
+            <button type="button" class="btn btn-facturar" onclick="facturar()">💳 Facturar pedido</button>
+        </div>
+    </aside>
+
+    <script>
+        const fmtBs = v => 'Bs ' + Number(v).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        let carrito = []; // almacenamiento temporal: se borra al presionar Facturar
+
+        function mostrarToast(mensaje, tipo) {
+            const anterior = document.getElementById('carritoToast');
+            if (anterior) anterior.remove();
+            const toast = document.createElement('div');
+            toast.id = 'carritoToast';
+            toast.className = 'carrito-toast ' + (tipo === 'ok' ? 'ok' : tipo === 'info' ? 'info' : 'error');
+            toast.textContent = mensaje;
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('mostrar'));
+            setTimeout(() => {
+                toast.classList.remove('mostrar');
+                setTimeout(() => toast.remove(), 400);
+            }, 3000);
+        }
+
+        function toggleCarrito(abrir) {
+            document.getElementById('carritoOverlay').classList.toggle('abierto', abrir);
+            document.getElementById('carritoDrawer').classList.toggle('abierto', abrir);
+            // El botón flotante desaparece mientras el carrito está abierto y vuelve al cerrarlo
+            document.getElementById('btnCarritoFlotante').style.display = abrir ? 'none' : 'flex';
+        }
+
+        async function buscarCliente() {
+            const input = document.getElementById('nit');
+            const razonInput = document.getElementById('razonSocial');
+            const razonWrapper = document.getElementById('razonWrapper');
+            const nit = input.value.trim().toUpperCase();
+            input.value = nit;
+            if (!nit) { mostrarToast('Ingrese un NIT para buscar.', 'error'); input.focus(); return; }
+
+            try {
+                const r = await fetch('/Cajero/BuscarCliente?nit=' + encodeURIComponent(nit));
+                const data = await r.json();
+                if (data.ok) {
+                    razonWrapper.style.display = '';
+                    razonInput.value = data.razonSocial || '';
+                    // Cliente id=1 (NIT "0" - "SIN NOMBRE"): la razón social queda bloqueada
+                    razonInput.disabled = !!data.bloqueado;
+                    mostrarToast(data.bloqueado ? 'Cliente bloqueado (SIN NOMBRE). No se puede modificar.' : 'Cliente encontrado.', data.bloqueado ? 'info' : 'ok');
+                } else {
+                    // No está registrado: se habilita la razón social para completarla
+                    razonWrapper.style.display = '';
+                    razonInput.disabled = false;
+                    razonInput.value = '';
+                    mostrarToast(data.mensaje || 'No está registrado. Complete la razón social.', 'error');
+                }
+            } catch (err) {
+                mostrarToast('Error al buscar el NIT.', 'error');
+            }
+        }
+
+        function agregar(id, nombre, precio) {
+            const item = carrito.find(p => p.id === id);
+            if (item) item.cantidad++;
+            else carrito.push({ id, nombre, precio: Number(precio), cantidad: 1 });
+            render();
+            mostrarToast('Producto agregado al carrito correctamente.', 'ok');
+        }
+
+        function cambiarCantidad(id, delta) {
+            const item = carrito.find(p => p.id === id);
+            if (!item) return;
+            item.cantidad += delta;
+            if (item.cantidad <= 0) carrito = carrito.filter(p => p.id !== id);
+            render();
+        }
+
+        function eliminarItem(id) {
+            carrito = carrito.filter(p => p.id !== id);
+            render();
+        }
+
+        function render() {
+            const body = document.getElementById('carritoBody');
+            const total = carrito.reduce((a, p) => a + p.precio * p.cantidad, 0);
+            const count = carrito.reduce((a, p) => a + p.cantidad, 0);
+
+            document.getElementById('btnCarritoCount').textContent = count;
+            document.getElementById('btnCarritoTotal').textContent = fmtBs(total);
+            document.getElementById('carritoResumen').textContent = count + (count === 1 ? ' producto' : ' productos');
+            document.getElementById('carritoTotal').textContent = fmtBs(total);
+
+            if (carrito.length === 0) {
+                body.innerHTML = '<div class="carrito-vacio">El carrito está vacío.<br>Agregue productos desde el menú.</div>';
+                return;
+            }
+
+            body.innerHTML = carrito.map(p => `
+                <div class="carrito-item">
+                    <div>
+                        <div class="c-nombre">${p.nombre}</div>
+                        <div class="small text-muted">${fmtBs(p.precio)} c/u</div>
+                    </div>
+                    <div class="c-controles">
+                        <button class="btn-cant" onclick="cambiarCantidad(${p.id}, -1)">−</button>
+                        <span>${p.cantidad}</span>
+                        <button class="btn-cant" onclick="cambiarCantidad(${p.id}, 1)">+</button>
+                        <span class="c-subtotal">${fmtBs(p.precio * p.cantidad)}</span>
+                        <button class="btn-eliminar" onclick="eliminarItem(${p.id})">🗑</button>
+                    </div>
+                </div>`).join('');
+        }
+
+        function seleccionarGrupo(idGrupo, el) {
+            document.querySelectorAll('.chip-categoria').forEach(c => c.classList.remove('activa'));
+            el.classList.add('activa');
+            document.querySelectorAll('.grupo-productos').forEach(g => g.style.display = 'none');
+            document.getElementById(idGrupo).style.display = '';
+        }
+
+        function cambiarTipoPedido() {
+            const tipos = document.getElementById('tipoPedido');
+            document.getElementById('mesaWrapper').style.display = tipos.value === 'MESA' ? '' : 'none';
+            if (tipos.value === 'MESA') document.getElementById('idMesa').focus();
+        }
+
+        function facturar() {
+            if (carrito.length === 0) { mostrarToast('El carrito está vacío. Agregue productos.', 'error'); return; }
+            const nombrePedido = document.getElementById('nombrePedido').value.trim();
+            if (!nombrePedido) { mostrarToast('Indique el nombre del pedido/cliente.', 'error'); document.getElementById('nombrePedido').focus(); return; }
+
+            const items = carrito.map(p => ({ idProducto: p.id, cantidad: p.cantidad, observacion: null }));
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+            fetch('/Cajero/Facturar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': token
+                },
+                body: JSON.stringify({
+                    nombrePedido,
+                    nit: document.getElementById('nit').value.trim(),
+                    razonSocial: document.getElementById('razonSocial').value.trim(),
+                    tipoPedido: document.getElementById('tipoPedido').value,
+                    idMesa: document.getElementById('tipoPedido').value === 'MESA' && document.getElementById('idMesa').value
+                        ? Number(document.getElementById('idMesa').value) : null,
+                    metodoPago: document.getElementById('metodoPago').value,
+                    observaciones: null,
+                    items
+                })
+            })
+            .then(async r => {
+                if (!r.ok) {
+                    const t = await r.text().catch(() => '');
+                    throw new Error('El servidor respondió ' + r.status + (t ? ' - ' + t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 160) : ''));
+                }
+                return r.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    // La factura aparece automáticamente: abrir la vista imprimible
+                    window.location.href = '/Cajero/FacturaVista/' + data.idPedido;
+                } else {
+                    mostrarToast(data.mensaje || 'No se pudo facturar el pedido.', 'error');
+                }
+            })
+            .catch(err => mostrarToast((err && err.message ? err.message : (err || "Error de conexión al facturar.").toString().replace(/^Error:\s*/, "")).substring(0, 200), 'error'));
+
+            // Al presionar Facturar el carrito temporal se borra
+            carrito = [];
+            render();
+            document.getElementById('nombrePedido').value = '';
+            document.getElementById('nit').value = '';
+            document.getElementById('razonSocial').value = '';
+            document.getElementById('razonSocial').disabled = false;
+            document.getElementById('razonWrapper').style.display = 'none';
+            document.getElementById('tipoPedido').value = 'PARA_LLEVAR';
+            document.getElementById('mesaWrapper').style.display = 'none';
+            toggleCarrito(false);
+        }
+
+        render();
+    </script>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

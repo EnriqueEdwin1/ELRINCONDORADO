@@ -1,0 +1,58 @@
+@model ELRINCONDORADO.Models.Empleado
+@{
+    ViewData["Title"] = "Eliminar Empleado";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var esAdmin = Model.Rol?.Nombre == "ADMINISTRADOR";
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/empleados.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Eliminar Empleado</h2>
+            <p class="mb-3">¿Estás seguro de que deseas eliminar al empleado <strong>@Model.Nombre @Model.Apellido</strong>?</p>
+            <p class="text-muted">No podrá eliminarse si tiene ventas, pedidos, compras o movimientos asociados.</p>
+            @if (esAdmin)
+            {
+                <div class="alert alert-warning">
+                    Un usuario administrador no puede ser eliminado.
+                </div>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Volver</a>
+            }
+            else
+            {
+                <form asp-action="Delete" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="IdEmpleado" />
+                    <button type="submit" class="btn btn-eliminar">Eliminar</button>
+                    <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+                </form>
+            }
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

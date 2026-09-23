@@ -1,0 +1,163 @@
+@model ELRINCONDORADO.Models.Pedido
+@using ELRINCONDORADO.Models
+@using ELRINCONDORADO.Helpers
+@using System.Globalization
+@{
+    ViewData["Title"] = $"Factura Nº {(Model.NumeroPedido ?? Model.IdPedido.ToString("D4"))}";
+    Layout = null;
+    var detalles = (Model.DetallesPedidos ?? new List<DetallePedido>()).OrderBy(d => d.IdDetalle).ToList();
+    var atendido = $"{Model.Empleado?.Nombre} {Model.Empleado?.Apellido}".Trim();
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - El Rincón Dorado</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Courier New', 'Segoe UI', monospace; }
+        body { background: #f3f0e8; padding: 28px 12px; }
+
+        /* ===== BARRA DE ACCIONES (no se imprime) ===== */
+        .acciones {
+            max-width: 400px; margin: 0 auto 16px; display: flex; gap: 8px;
+            flex-wrap: wrap; align-items: center; justify-content: space-between;
+        }
+        .acciones h2 { font-size: 15px; color: #5c4a1e; margin-right: auto; }
+        .acciones a, .acciones button {
+            border: none; cursor: pointer; text-decoration: none; font-size: 13px;
+            font-weight: 700; border-radius: 9px; padding: 10px 14px; transition: all .25s ease;
+        }
+        .btn-volver { color: #6b5a2a; background: #fff; border: 2px solid #d4b96a; }
+        .btn-volver:hover { background: #f5ecd3; }
+        .btn-imprimir { color: #fff; background: linear-gradient(135deg, #4a7bd1, #2f56a8); }
+        .btn-pdf { color: #fff; background: linear-gradient(135deg, #d4af37, #b8941e); }
+        .acciones a:hover, .acciones button:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.18); }
+
+        /* ===== TICKET ANCHO (hoja rectangular estilo supermercado) ===== */
+        .ticket {
+            max-width: 400px; margin: 0 auto; background: #fff; border-radius: 4px;
+            padding: 18px 16px; box-shadow: 0 12px 30px rgba(0,0,0,.18); color: #000;
+            font-size: 13px; line-height: 1.5;
+        }
+        .ticket img.logo { display: block; width: 150px; max-width: 85%; margin: 0 auto 8px; object-fit: contain; }
+        .centro { text-align: center; }
+        .ticket .nombre-tienda { font-size: 18px; font-weight: 800; letter-spacing: 1px; color: #b8941e; }
+        .ticket .tipo-factura { font-size: 13px; font-weight: 700; }
+        .sep { text-align: center; color: #999; font-size: 12px; padding: 4px 0; letter-spacing: -1px; }
+
+        .fila { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+        .fila .e { color: #666; white-space: nowrap; }
+        .fila .v { font-weight: 700; text-align: right; word-break: break-word; }
+
+        table.items { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.items th {
+            text-align: left; padding: 3px 2px; border-bottom: 1px dashed #999; font-size: 11px;
+        }
+        table.items th.d, table.items td.d { text-align: right; }
+        table.items th.c, table.items td.c { text-align: center; }
+        table.items td { padding: 4px 2px; border-bottom: 1px dotted #ddd; vertical-align: top; }
+        table.items td.p { word-break: break-word; }
+
+        .totales { margin-top: 8px; }
+        .totales .fila { font-size: 13px; margin: 3px 0; }
+        .totales .gran-total { font-size: 16px; font-weight: 800; border-top: 2px solid #000; padding-top: 6px; margin-top: 8px; }
+        .totales .gran-total .v { color: #b8941e; }
+
+        .pie { text-align: center; font-size: 11px; color: #555; margin-top: 12px; }
+        .pie .gracias { font-size: 14px; font-weight: 800; color: #000; margin-bottom: 6px; }
+
+        /* ===== IMPRESIÓN ===== */
+        @@media print {
+            body { background: #fff; padding: 0; }
+            .acciones { display: none !important; }
+            .ticket { box-shadow: none; border-radius: 0; max-width: none; padding: 0; }
+            .ticket img.logo { width: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="acciones">
+        <h2>Factura #@Model.IdPedido</h2>
+        <a class="btn-volver" href="/Cajero">← POS</a>
+        <button class="btn-pdf" type="button" onclick="window.open('/Cajero/Factura/@Model.IdPedido', '_blank')">📄 PDF</button>
+        <button class="btn-imprimir" type="button" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+
+    <div class="ticket">
+        <!-- Encabezado con logo -->
+        <img src="~/img/logo.png" alt="Logo El Rincón Dorado" class="logo" />
+        <div class="centro nombre-tienda">EL RINCÓN DORADO</div>
+        <div class="centro tipo-factura">FACTURA DE VENTA</div>
+        <div class="sep">- - - - - - - - - - - - - - - - - - - - - -</div>
+
+        <!-- Datos de la factura y del cliente -->
+        <div class="fila"><span class="e">Nº Factura:</span><span class="v">@(Model.NumeroPedido ?? Model.IdPedido.ToString("D4"))</span></div>
+        <div class="fila"><span class="e">Fecha:</span><span class="v">@Model.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</span></div>
+        <div class="fila"><span class="e">Tipo:</span><span class="v">@(Model.TipoPedido == "MESA" ? (Model.Mesa != null ? "Mesa " + Model.Mesa.Numero : "Servido en mesa") : "Para llevar")</span></div>
+        <div class="fila"><span class="e">Estado:</span><span class="v">@Model.Estado</span></div>
+        <div class="fila"><span class="e">Pago:</span><span class="v">@Model.EstadoPago</span></div>
+        <div class="fila"><span class="e">NIT/CI:</span><span class="v">@(Model.Cliente?.Nit ?? "-")</span></div>
+        <div class="fila"><span class="e">Cliente:</span><span class="v">@(Model.Cliente?.RazonSocial ?? "SIN NOMBRE")</span></div>
+        <div class="sep">- - - - - - - - - - - - - - - - - - - - - -</div>
+
+        <!-- Detalle de productos -->
+        <table class="items">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th class="c">Cant</th>
+                    <th class="d">P.Unit</th>
+                    <th class="d">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (detalles.Count == 0)
+                {
+                    <tr><td colspan="4" class="p">Sin productos registrados.</td></tr>
+                }
+                @foreach (var det in detalles)
+                {
+                    <tr>
+                        <td class="p">
+                            @(det.Producto?.Nombre ?? "Producto")
+                            @if (!string.IsNullOrWhiteSpace(det.Observacion))
+                            {
+                                <div style="color:#8a7414; font-size:10px;">📝 @det.Observacion</div>
+                            }
+                        </td>
+                        <td class="c">@MonedaHelper.FormatearNumero(det.Cantidad)</td>
+                        <td class="d">@MonedaHelper.FormatearBs(det.PrecioUnitario)</td>
+                        <td class="d">@MonedaHelper.FormatearBs(det.Subtotal)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="sep">- - - - - - - - - - - - - - - - - - - - - -</div>
+
+        <!-- Totales -->
+        <div class="totales">
+            <div class="fila"><span class="e">Subtotal:</span><span class="v">@MonedaHelper.FormatearBs(Model.Subtotal)</span></div>
+            @if (Model.Descuento > 0)
+            {
+                <div class="fila"><span class="e">Descuento:</span><span class="v">@MonedaHelper.FormatearBs(Model.Descuento)</span></div>
+            }
+            <div class="fila gran-total"><span class="e">TOTAL:</span><span class="v">@MonedaHelper.FormatearBs(Model.Total)</span></div>
+        </div>
+
+        <div class="sep">- - - - - - - - - - - - - - - - - - - - - -</div>
+
+        <!-- Pie del ticket -->
+        <div class="pie">
+            <div class="gracias">¡Gracias por su compra!</div>
+            El Rincón Dorado – Confianza y rendimiento<br />
+            @if (!string.IsNullOrWhiteSpace(atendido))
+            {
+                <text>Atendido por: @atendido<br /></text>
+            }
+            Factura generada el @DateTime.Now.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+        </div>
+    </div>
+</body>
+</html>

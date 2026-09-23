@@ -1,0 +1,170 @@
+.table-empleados {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.table-empleados thead {
+    background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+    color: white;
+}
+
+.table-empleados thead th {
+    font-weight: 600;
+    border: none;
+    padding: 14px 12px;
+}
+
+.table-empleados tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table-empleados tbody tr:hover {
+    background-color: rgba(212, 175, 55, 0.08);
+}
+
+.fila-clic {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.fila-clic:hover {
+    background-color: rgba(212, 175, 55, 0.22) !important;
+}
+
+.table-empleados tbody td {
+    vertical-align: middle;
+    padding: 12px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.badge-estado {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-estado.activo {
+    background: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+}
+
+.badge-estado.inactivo {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+}
+
+.btn-editar {
+    background: #d4af37;
+    color: white;
+    font-weight: 600;
+}
+
+.btn-editar:hover {
+    background: #b8941e;
+    color: white;
+}
+
+/* Formulario de edición */
+.form-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.form-card h2 {
+    text-align: center;
+    color: #d4af37;
+    font-weight: 700;
+    margin-bottom: 25px;
+}
+
+.form-control {
+    border-radius: 8px;
+}
+
+.form-control:focus {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2);
+}
+
+.btn-guardar {
+    background: #d4af37;
+    color: white;
+    font-weight: 600;
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+.btn-guardar:hover {
+    background: #b8941e;
+    color: white;
+}
+
+.btn-cancelar {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    background: white;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.btn-cancelar:hover {
+    background: #f0f0f0;
+    color: #333;
+}
+
+/* ========== MOSTRAR/OCULTAR CONTRASEÑA ========== */
+.password-input-wrap {
+    position: relative;
+}
+
+.password-input-wrap .form-control {
+    padding-right: 46px;
+}
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.password-toggle:hover {
+    color: #d4af37;
+}
+
+.eye-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.eye-icon.eye-closed {
+    display: none;
+}
+
+.password-toggle.showing .eye-icon.eye-open {
+    display: none;
+}
+
+.password-toggle.showing .eye-icon.eye-closed {
+    display: block;
+}

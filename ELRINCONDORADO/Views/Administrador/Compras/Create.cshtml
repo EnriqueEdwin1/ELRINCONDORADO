@@ -1,0 +1,415 @@
+@model ELRINCONDORADO.Models.CompraViewModel
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Nueva Compra";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var insumosJson = System.Text.Json.JsonSerializer.Serialize(
+        ((IEnumerable<ELRINCONDORADO.Models.Insumo>)ViewBag.Insumos)
+        .Select(i => new { i.IdInsumo, i.Nombre, i.UnidadMedida, i.CostoUnitario }));
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+    <style>
+        .buscador-resultados {
+            position: absolute;
+            z-index: 1050;
+            width: 100%;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: .375rem;
+        }
+        .buscador-resultados .item-resultado {
+            cursor: pointer;
+            background: #fff;
+            padding: .5rem .75rem;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        .buscador-resultados .item-resultado:hover {
+            background: #ffe9c9;
+        }
+        .limpiar-seleccion {
+            position: absolute;
+            right: .5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 1.05rem;
+            line-height: 1;
+            padding: .15rem .35rem;
+            z-index: 1060;
+        }
+        .limpiar-seleccion:hover {
+            color: #d9534f;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card form-card-wide">
+            <h2>Nueva Compra</h2>
+            <form asp-action="Create" method="post" id="formCompra">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Proveedor</label>
+                    <select name="IdProveedor" class="form-control" asp-items="ViewBag.IdProveedor" required>
+                        <option value="">Seleccionar proveedor...</option>
+                    </select>
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label mb-0">Insumos a comprar</label>
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#modalCrearInsumo">
+                            + Crear insumo
+                        </button>
+                    </div>
+
+                    <div class="d-flex gap-2 mb-2" id="buscadorInsumos">
+                        <div class="position-relative flex-grow-1">
+                            <input type="text" id="buscarInsumoCompra" class="form-control"
+                                   placeholder="Buscar insumo por nombre..." autocomplete="off"
+                                   style="padding-right: 2.5rem;" />
+                            <button type="button" id="btnLimpiarSeleccion" class="limpiar-seleccion d-none"
+                                    title="Quitar selección" aria-label="Quitar selección">✕</button>
+                            <div id="resultadoBusqueda" class="buscador-resultados d-none"></div>
+                        </div>
+                        <button type="button" id="btnAnadirCompra" class="btn btn-modulo">Añadir</button>
+                    </div>
+
+                    <small class="text-danger d-none" id="errorAgregar"></small>
+
+                    <div class="table-responsive">
+                        <table class="table table-crud detalle-table" id="tablaDetalles">
+                            <thead>
+                                <tr>
+                                    <th style="min-width: 200px;">Insumo</th>
+                                    <th style="min-width: 110px;">Cantidad</th>
+                                    <th style="min-width: 120px;">Costo Unitario</th>
+                                    <th>Subtotal</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="text-danger" id="errorDetalles" style="display: none;">Agrega al menos un insumo con cantidad mayor a cero.</div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label">Descuento</label>
+                        <input type="number" name="Descuento" class="form-control" min="0" step="0.01" value="@Model.Descuento.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-4 mb-4">
+                    <div>
+                        <span class="text-muted">Subtotal: </span>
+                        <span id="txtSubtotal" class="fw-bold">Bs 0.00</span>
+                    </div>
+                    <div>
+                        <span class="text-muted">Total: </span>
+                        <span id="txtTotal" class="fw-bold text-success" style="font-size: 1.1rem;">Bs 0.00</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-guardar">Registrar compra</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: crear insumo sin salir de la página -->
+    <div class="modal fade" id="modalCrearInsumo" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Insumo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formCrearInsumo">
+                        @Html.AntiForgeryToken()
+                        <div id="errorCrearInsumo" class="alert alert-danger d-none"></div>
+
+                        <div class="form-group mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" id="NombreModal" name="nombre" class="form-control" placeholder="Ej: Aceite 3L" required
+                                   pattern="[A-Za-z0-9 ÁÉÍÓÚÜÑáéíóúüñ-]+"
+                                   title="El nombre no puede contener símbolos." />
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea name="descripcion" class="form-control" rows="2" placeholder="Ej: Harina de trigo para la masa"></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Unidad de Medida</label>
+                                <select name="unidadMedida" class="form-control" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Unidad">Unidad</option>
+                                    <option value="Kilogramo">Kilogramo</option>
+                                    <option value="Litros">Litros</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Destino</label>
+                                <select name="idDestino" class="form-control" required>
+                                    @foreach (var dest in (IEnumerable<ELRINCONDORADO.Models.DestinoInsumo>)ViewBag.Destinos)
+                                    {
+                                        <option value="@dest.IdDestino">@dest.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Costo Unitario</label>
+                                <input type="number" name="costoUnitario" class="form-control" min="0" step="0.01" placeholder="Ej: 12.50" required />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Stock Mínimo</label>
+                                <input type="number" name="stockMinimo" class="form-control" min="0" step="any" placeholder="Ej: 5" />
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Stock Actual</label>
+                                <input type="number" name="stockActual" class="form-control" min="0" step="any" placeholder="Ej: 0" />
+                            </div>
+                            <div class="col-md-6 mb-3 d-flex align-items-center" style="padding-top: 2rem;">
+                                <div class="form-check form-switch">
+                                    <input type="checkbox" class="form-check-input" id="chkActivoInsumo" checked />
+                                    <label class="form-check-label" for="chkActivoInsumo">Insumo activo</label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancelar" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formCrearInsumo" class="btn btn-guardar">Guardar insumo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        var insumos = @Html.Raw(insumosJson);
+        var insumoSeleccionado = null;
+
+        function renumerar() {
+            $('#tablaDetalles tbody tr').each(function (i, fila) {
+                $(fila).find('.f-IdInsumo').attr('name', 'Detalles[' + i + '].IdInsumo');
+                $(fila).find('.f-Cantidad').attr('name', 'Detalles[' + i + '].Cantidad');
+                $(fila).find('.f-Costo').attr('name', 'Detalles[' + i + '].CostoUnitario');
+            });
+        }
+
+        function recalcular() {
+            var subtotal = 0;
+            $('#tablaDetalles tbody tr').each(function () {
+                var cantidad = parseFloat($(this).find('.f-Cantidad').val()) || 0;
+                var costo = parseFloat($(this).find('.f-Costo').val()) || 0;
+                var linea = cantidad * costo;
+                subtotal += linea;
+                $(this).find('.subtotal-linea').text('Bs ' + linea.toFixed(2));
+            });
+            var descuento = parseFloat($('input[name="Descuento"]').val()) || 0;
+            var total = Math.max(subtotal - descuento, 0);
+            $('#txtSubtotal').text('Bs ' + subtotal.toFixed(2));
+            $('#txtTotal').text('Bs ' + total.toFixed(2));
+        }
+
+        function formatearBs(n) {
+            return 'Bs ' + (Number(n) || 0).toFixed(2);
+        }
+
+        function seleccionarInsumo(insumo) {
+            insumoSeleccionado = insumo;
+            $('#buscarInsumoCompra').val(insumo.Nombre);
+            $('#resultadoBusqueda').addClass('d-none').empty();
+            $('#errorAgregar').addClass('d-none');
+            $('#btnLimpiarSeleccion').removeClass('d-none');
+        }
+
+        function agregarFila(insumo) {
+            var fila = '<tr>' +
+                '<td><input type="hidden" class="f-IdInsumo" value="' + insumo.IdInsumo + '" />' +
+                '<span class="fw-semibold">' + insumo.Nombre + '</span></td>' +
+                '<td><input type="number" class="form-control f-Cantidad" min="0" step="any" value="1" placeholder="0" required /></td>' +
+                '<td><input type="number" class="form-control f-Costo" min="0.01" step="0.01" value="' + insumo.CostoUnitario + '" placeholder="0" required /></td>' +
+                '<td class="subtotal-linea text-end fw-semibold">Bs 0.00</td>' +
+                '<td><button type="button" class="btn btn-sm btn-eliminar btn-quitar">✕</button></td>' +
+                '</tr>';
+            $('#tablaDetalles tbody').append(fila);
+            renumerar();
+            recalcular();
+        }
+
+        $('#buscarInsumoCompra').on('input', function () {
+            if (insumoSeleccionado) {
+                insumoSeleccionado = null;
+                $('#btnLimpiarSeleccion').addClass('d-none');
+            }
+            var term = $(this).val().trim().toLowerCase();
+            var cont = $('#resultadoBusqueda');
+            cont.empty();
+            if (!term) {
+                cont.addClass('d-none');
+                return;
+            }
+            var matches = insumos.filter(function (i) {
+                return i.Nombre.toLowerCase().indexOf(term) !== -1;
+            });
+            if (matches.length === 0) {
+                cont.append('<div class="item-resultado text-muted">Sin resultados</div>');
+            } else {
+                matches.forEach(function (i) {
+                    var item = $('<div class="item-resultado"></div>')
+                        .text(i.Nombre + ' (' + i.UnidadMedida + ') — ' + formatearBs(i.CostoUnitario));
+                    item.on('click', function () { seleccionarInsumo(i); });
+                    cont.append(item);
+                });
+            }
+            cont.removeClass('d-none');
+        });
+
+        $('#btnAnadirCompra').on('click', function () {
+            var msj = $('#errorAgregar');
+            if (!insumoSeleccionado) {
+                msj.removeClass('d-none').text('Busca y selecciona un insumo antes de añadirlo.');
+                return;
+            }
+            var id = insumoSeleccionado.IdInsumo;
+            var yaExiste = false;
+            $('#tablaDetalles tbody tr .f-IdInsumo').each(function () {
+                if (parseInt(this.value) === id) yaExiste = true;
+            });
+            if (yaExiste) {
+                msj.removeClass('d-none').text(insumoSeleccionado.Nombre + ' ya está en la lista.');
+                return;
+            }
+            msj.addClass('d-none');
+            agregarFila(insumoSeleccionado);
+            insumoSeleccionado = null;
+            $('#buscarInsumoCompra').val('');
+            $('#btnLimpiarSeleccion').addClass('d-none');
+            $('#buscarInsumoCompra').focus();
+        });
+
+        $('#btnLimpiarSeleccion').on('click', function () {
+            insumoSeleccionado = null;
+            $('#buscarInsumoCompra').val('');
+            $('#btnLimpiarSeleccion').addClass('d-none');
+            $('#buscarInsumoCompra').focus();
+        });
+
+        $(document).on('click', function (e) {
+            if (!$(e.target).closest('#buscadorInsumos').length) {
+                $('#resultadoBusqueda').addClass('d-none');
+            }
+        });
+
+        $(document).on('input', '.f-Cantidad, .f-Costo', recalcular);
+        $(document).on('input', 'input[name="Descuento"]', recalcular);
+
+        $(document).on('click', '.btn-quitar', function () {
+            $(this).closest('tr').remove();
+            renumerar();
+            recalcular();
+        });
+
+        $(document).on('submit', '#formCompra', function () {
+            var valido = false;
+            $('#tablaDetalles tbody tr').each(function () {
+                var cantidad = parseFloat($(this).find('.f-Cantidad').val()) || 0;
+                if ($(this).find('.f-IdInsumo').val() && cantidad > 0) valido = true;
+            });
+            if (!valido) {
+                $('#errorDetalles').show();
+                return false;
+            }
+            $('#errorDetalles').hide();
+            return true;
+        });
+
+        // === Modal: crear insumo sin salir de la página ===
+        $(document).on('submit', '#formCrearInsumo', function (e) {
+            e.preventDefault();
+            var msj = $('#errorCrearInsumo');
+            msj.addClass('d-none');
+            var chk = $('#chkActivoInsumo');
+            var data = $(this).serialize() + '&activo=' + (chk.is(':checked') ? 'true' : 'false');
+            var btn = $(this).find('button[type=submit]');
+            btn.prop('disabled', true);
+
+            $.ajax({
+                url: '@Url.Action("CrearInsumoJson", "Compras")',
+                type: 'POST',
+                data: data,
+                dataType: 'json',
+                success: function (res) {
+                    if (res && res.ok) {
+                        insumos.push(res.insumo);
+                        agregarFila(res.insumo);
+                        $('#modalCrearInsumo').modal('hide');
+                        $('#formCrearInsumo')[0].reset();
+                        chk.prop('checked', true);
+                    } else {
+                        msj.removeClass('d-none').text((res && res.error) || 'No se pudo crear el insumo.');
+                    }
+                },
+                error: function () {
+                    msj.removeClass('d-none').text('Error al guardar el insumo. Intenta de nuevo.');
+                },
+                complete: function () {
+                    btn.prop('disabled', false);
+                }
+            });
+        });
+
+        $('#modalCrearInsumo').on('hide.bs.modal', function () {
+            $('#errorCrearInsumo').addClass('d-none');
+            $('#ErrorNombreModal').addClass('d-none');
+        });
+
+        $('#modalCrearInsumo').on('hidden.bs.modal', function () {
+            $('#formCrearInsumo')[0].reset();
+            $('#chkActivoInsumo').prop('checked', true);
+        });
+    </script>
+</body>
+</html>

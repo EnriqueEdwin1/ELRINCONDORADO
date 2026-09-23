@@ -1,0 +1,135 @@
+@{
+    ViewData["Title"] = "Panel de Administración";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var rol = Context.Session.GetString("Rol");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="welcome-card">
+            <h2>¡Bienvenido, @nombre!</h2>
+            <p>Rol: <strong>@rol</strong></p>
+            <p>Hora de acceso: <strong>@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</strong></p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">📊 Reportes</div>
+                    <div class="card-body">
+                        <p>Ventas, ingresos y métricas generales.</p>
+                        <a href="/Ventas" class="btn btn-sm btn-modulo">Ver reportes</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">👥 Empleados</div>
+                    <div class="card-body">
+                        <p>Gestión de empleados y roles.</p>
+                        <a href="/Empleados" class="btn btn-sm btn-modulo">Ver empleados</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🍔 Productos</div>
+                    <div class="card-body">
+                        <p>Catálogo, categorías y promociones.</p>
+                        <a href="/Productos" class="btn btn-sm btn-modulo">Ver productos</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">💳 Pedidos y Ventas</div>
+                    <div class="card-body">
+                        <p>Mesas, pedidos y ventas del día.</p>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <a href="/Pedidos" class="btn btn-sm btn-modulo">Ver pedidos</a>
+                            <a href="/Ventas" class="btn btn-sm btn-modulo">Ver ventas</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">📦 Inventario</div>
+                    <div class="card-body">
+                        <p>Insumos, stock y movimientos.</p>
+                        <a href="/Insumos" class="btn btn-sm btn-modulo">Ver insumos</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">📖 Recetas</div>
+                    <div class="card-body">
+                        <p>Recetas por producto.</p>
+                        <a href="/Recetas" class="btn btn-sm btn-modulo">Ver recetas</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🚚 Proveedores</div>
+                    <div class="card-body">
+                        <p>Proveedores y compras.</p>
+                        <a href="/Proveedores" class="btn btn-sm btn-modulo">Ver proveedores</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🛒 Compras</div>
+                    <div class="card-body">
+                        <p>Registro de compras a proveedores.</p>
+                        <a href="/Compras" class="btn btn-sm btn-modulo">Ver compras</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">🔄 Movimientos</div>
+                    <div class="card-body">
+                        <p>Salidas de insumos del inventario.</p>
+                        <a href="/MovimientosInventario" class="btn btn-sm btn-modulo">Ver movimientos</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+@model ELRINCONDORADO.Models.MovimientoInventario
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Detalle Movimiento";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Detalle del Movimiento</h2>
+            <dl class="row">
+                <dt class="col-sm-4">ID</dt>
+                <dd class="col-sm-8">@Model.IdMovimiento</dd>
+
+                <dt class="col-sm-4">Insumo</dt>
+                <dd class="col-sm-8">@(Model.Insumo?.Nombre ?? "—")</dd>
+
+                <dt class="col-sm-4">Tipo</dt>
+                <dd class="col-sm-8">
+                    @if (Model.TipoMovimiento == "SALIDA")
+                    {
+                        <span class="badge-estado inactivo">Salida</span>
+                    }
+                    else
+                    {
+                        <span class="badge-estado activo">Entrada</span>
+                    }
+                </dd>
+
+                <dt class="col-sm-4">Cantidad</dt>
+                <dd class="col-sm-8">@MonedaHelper.FormatearNumero(Model.Cantidad)</dd>
+
+                <dt class="col-sm-4">Fecha</dt>
+                <dd class="col-sm-8">@Model.Fecha.ToString("dd/MM/yyyy HH:mm")</dd>
+
+                <dt class="col-sm-4">Empleado</dt>
+                <dd class="col-sm-8">@(Model.Empleado?.Usuario ?? "—")</dd>
+
+                <dt class="col-sm-4">Motivo</dt>
+                <dd class="col-sm-8">@(string.IsNullOrEmpty(Model.Motivo) ? "—" : Model.Motivo)</dd>
+            </dl>
+            <a href="/Administrador" class="btn btn-sm btn-outline-secondary">← Volver a administración</a>
+            <a asp-action="Index" class="btn btn-modulo">Volver a movimientos</a>
+            <a asp-action="Edit" asp-route-id="@Model.IdMovimiento" class="btn btn-editar">Editar</a>
+            <a asp-action="Delete" asp-route-id="@Model.IdMovimiento" class="btn btn-eliminar">Eliminar</a>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

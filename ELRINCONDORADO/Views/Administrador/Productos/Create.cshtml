@@ -1,0 +1,244 @@
+@model ELRINCONDORADO.Models.ProductoRecetaViewModel
+@{
+    ViewData["Title"] = "Agregar Producto";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var insumos = ((IEnumerable<ELRINCONDORADO.Models.Insumo>)ViewBag.Insumos).Select(i => new { i.IdInsumo, i.Nombre, i.UnidadMedida });
+    var insumosJson = System.Text.Json.JsonSerializer.Serialize(insumos);
+    var detallesJson = System.Text.Json.JsonSerializer.Serialize(
+        Model.Receta.Detalles.Select(d => new { d.IdInsumo, d.Cantidad, d.UnidadMedida }));
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card form-card-wide">
+            <h2>Agregar Producto</h2>
+            <form asp-action="Create" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <div class="form-group mb-3">
+                    <label asp-for="Producto.IdCategoria" class="form-label">Categoría</label>
+                    <select asp-for="Producto.IdCategoria" class="form-control" asp-items="ViewBag.IdCategoria" required></select>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Producto.Codigo" class="form-label">Código</label>
+                        <input asp-for="Producto.Codigo" class="form-control" placeholder="Opcional" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="Producto.Precio" class="form-label">Precio</label>
+                        <input asp-for="Producto.Precio" class="form-control" type="number" step="0.01" min="0" required />
+                    </div>
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="Producto.Nombre" class="form-label">Nombre</label>
+                    <input asp-for="Producto.Nombre" class="form-control" required />
+                </div>
+                <div class="form-group mb-3">
+                    <label asp-for="Producto.Descripcion" class="form-label">Descripción</label>
+                    <textarea asp-for="Producto.Descripcion" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="form-group mb-3">
+                    <label class="form-label">Imagen del producto</label>
+                    <input type="file" name="imagenFile" id="imagenFile" class="form-control" accept="image/*" />
+                    <div id="previewContainer" class="mt-2" style="display: none;">
+                        <img id="imagenPreview" class="img-thumbnail" style="max-height: 150px;" alt="Vista previa" />
+                    </div>
+                    <small class="form-text text-muted">La imagen se subirá automáticamente a ImgBB (opcional).</small>
+                </div>
+                <div class="form-check form-switch mb-4">
+                    <input asp-for="Producto.Activo" class="form-check-input" type="checkbox" checked />
+                    <label asp-for="Producto.Activo" class="form-check-label">Producto activo</label>
+                </div>
+
+                <hr />
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="IncluirReceta" value="true" id="incluirReceta" @(Model.IncluirReceta ? "checked" : "") />
+                    <label class="form-check-label" for="incluirReceta">Agregar receta para este producto</label>
+                    <input type="hidden" name="IncluirReceta" value="false" />
+                </div>
+
+                <div id="seccionReceta" style="display: none;">
+                    <div class="form-group mb-3">
+                        <label class="form-label">Descripción de la receta</label>
+                        <textarea name="Receta.Descripcion" class="form-control" rows="3" placeholder="Ingredientes y preparación"></textarea>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0">Insumos de la receta</label>
+                            <button type="button" class="btn btn-sm btn-modulo btn-agregar">+ Agregar insumo</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-crud detalle-table" id="tablaDetalles">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width: 220px;">Insumo</th>
+                                        <th style="min-width: 110px;">Cantidad</th>
+                                        <th style="min-width: 130px;">Unidad de medida</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="text-danger" id="errorDetalles" style="display: none;">Agrega al menos un insumo con cantidad mayor a cero.</div>
+                    </div>
+
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" type="checkbox" name="Receta.Activo" value="true" id="recetaActiva" checked />
+                        <label class="form-check-label" for="recetaActiva">Receta activa</label>
+                        <input type="hidden" name="Receta.Activo" value="false" />
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-guardar">Guardar</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('imagenFile').addEventListener('change', function () {
+            var archivo = this.files && this.files[0];
+            var contenedor = document.getElementById('previewContainer');
+            if (archivo) {
+                var lector = new FileReader();
+                lector.onload = function (e) {
+                    document.getElementById('imagenPreview').src = e.target.result;
+                    contenedor.style.display = 'block';
+                };
+                lector.readAsDataURL(archivo);
+            } else {
+                contenedor.style.display = 'none';
+            }
+        });
+
+        var insumos = @Html.Raw(insumosJson);
+        var detalles = @Html.Raw(detallesJson);
+
+        function opcionesInsumo(seleccionado) {
+            var usados = [];
+            $('#tablaDetalles tbody tr').each(function () {
+                var v = parseInt($(this).find('.f-IdInsumo').val()) || 0;
+                if (v && v !== seleccionado && usados.indexOf(v) === -1) usados.push(v);
+            });
+            var opciones = '<option value="">Seleccionar...</option>';
+            insumos.forEach(function (i) {
+                if (usados.indexOf(i.IdInsumo) !== -1) return;
+                var sel = seleccionado === i.IdInsumo ? ' selected' : '';
+                opciones += '<option value="' + i.IdInsumo + '"' + sel + '>' + i.Nombre + ' (' + i.UnidadMedida + ')</option>';
+            });
+            return opciones;
+        }
+
+        function refrescarOpciones() {
+            $('#tablaDetalles tbody tr').each(function () {
+                var fila = $(this);
+                var actual = parseInt(fila.find('.f-IdInsumo').val()) || 0;
+                fila.find('.f-IdInsumo').html(opcionesInsumo(actual));
+            });
+        }
+
+        function renumerar() {
+            $('#tablaDetalles tbody tr').each(function (i, fila) {
+                $(fila).find('.f-IdInsumo').attr('name', 'Receta.Detalles[' + i + '].IdInsumo');
+                $(fila).find('.f-Cantidad').attr('name', 'Receta.Detalles[' + i + '].Cantidad');
+                $(fila).find('.f-UnidadMedida').attr('name', 'Receta.Detalles[' + i + '].UnidadMedida');
+            });
+        }
+
+        function agregarFila(detalle) {
+            var fila = '<tr>' +
+                '<td><select class="form-control f-IdInsumo" required>' + opcionesInsumo(detalle ? detalle.IdInsumo : 0) + '</select></td>' +
+                '<td><input type="number" class="form-control f-Cantidad" min="0" step="any" value="' + (detalle ? detalle.Cantidad : '') + '" required /></td>' +
+                '<td><input type="text" class="form-control f-UnidadMedida" readonly value="' + (detalle ? detalle.UnidadMedida : '') + '" /></td>' +
+                '<td><button type="button" class="btn btn-sm btn-eliminar btn-quitar">✕</button></td>' +
+                '</tr>';
+            $('#tablaDetalles tbody').append(fila);
+            renumerar();
+            refrescarOpciones();
+        }
+
+        $(document).on('change', '.f-IdInsumo', function () {
+            var id = parseInt($(this).val()) || 0;
+            var insumo = insumos.find(function (i) { return i.IdInsumo === id; });
+            if (insumo) {
+                $(this).closest('tr').find('.f-UnidadMedida').val(insumo.UnidadMedida);
+            }
+            refrescarOpciones();
+        });
+
+        $(document).on('click', '.btn-agregar', function () {
+            var hayVacio = false;
+            $('#tablaDetalles tbody tr').each(function () {
+                if (!$(this).find('.f-IdInsumo').val()) hayVacio = true;
+            });
+            if (!hayVacio) agregarFila(null);
+        });
+
+        $(document).on('click', '.btn-quitar', function () {
+            $(this).closest('tr').remove();
+            renumerar();
+            refrescarOpciones();
+        });
+
+        $(document).on('submit', 'form', function () {
+            if (!$('#incluirReceta').is(':checked')) return true;
+
+            var valido = false;
+            $('#tablaDetalles tbody tr').each(function () {
+                var cantidad = parseFloat($(this).find('.f-Cantidad').val()) || 0;
+                if ($(this).find('.f-IdInsumo').val() && cantidad > 0) valido = true;
+            });
+            if (!valido) {
+                $('#errorDetalles').show();
+                return false;
+            }
+            $('#errorDetalles').hide();
+            return true;
+        });
+
+        function alternarReceta() {
+            var activo = $('#incluirReceta').is(':checked');
+            $('#seccionReceta').toggle(activo);
+            $('#seccionReceta').find('input, select, textarea, button').prop('disabled', !activo);
+        }
+
+        $('#incluirReceta').on('change', alternarReceta);
+
+        $(function () {
+            if (detalles && detalles.length > 0) {
+                detalles.forEach(function (d) { agregarFila(d); });
+            } else {
+                agregarFila(null);
+            }
+            alternarReceta();
+        });
+    </script>
+</body>
+</html>

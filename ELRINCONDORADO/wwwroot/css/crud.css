@@ -1,0 +1,147 @@
+.table-crud {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.table-crud thead {
+    background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%);
+    color: white;
+}
+
+.table-crud thead th {
+    font-weight: 600;
+    border: none;
+    padding: 14px 12px;
+}
+
+.table-crud tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table-crud tbody tr:hover {
+    background-color: rgba(212, 175, 55, 0.08);
+}
+
+.fila-clic {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.fila-clic:hover {
+    background-color: rgba(212, 175, 55, 0.22) !important;
+}
+
+.table-crud tbody td {
+    vertical-align: middle;
+    padding: 12px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.badge-estado {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-estado.activo {
+    background: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+}
+
+.badge-estado.inactivo {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+}
+
+.btn-editar {
+    background: #d4af37;
+    color: white;
+    font-weight: 600;
+}
+
+.btn-editar:hover {
+    background: #b8941e;
+    color: white;
+}
+
+.btn-eliminar {
+    background: white;
+    color: #dc3545;
+    border: 1px solid #dc3545;
+    font-weight: 600;
+}
+
+.btn-eliminar:hover {
+    background: #dc3545;
+    color: white;
+}
+
+.right-side {
+    text-align: right;
+}
+
+.form-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 30px;
+    max-width: 650px;
+    margin: 0 auto;
+}
+
+.form-card h2 {
+    text-align: center;
+    color: #d4af37;
+    font-weight: 700;
+    margin-bottom: 25px;
+}
+
+.form-card-wide {
+    max-width: 950px;
+}
+
+.detalle-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.form-control {
+    border-radius: 8px;
+}
+
+.form-control:focus {
+    border-color: #d4af37;
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2);
+}
+
+.btn-guardar {
+    background: #d4af37;
+    color: white;
+    font-weight: 600;
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+}
+
+.btn-guardar:hover {
+    background: #b8941e;
+    color: white;
+}
+
+.btn-cancelar {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    background: white;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.btn-cancelar:hover {
+    background: #f0f0f0;
+    color: #333;
+}

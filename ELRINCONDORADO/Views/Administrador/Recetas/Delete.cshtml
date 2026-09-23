@@ -1,0 +1,52 @@
+@model ELRINCONDORADO.Models.Receta
+@{
+    ViewData["Title"] = "Eliminar Receta";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card text-center">
+            <h2>Eliminar Receta</h2>
+            <p class="mb-1">¿Estás seguro de que deseas eliminar la receta <strong>Nº @Model.IdReceta.ToString("D4")</strong>?</p>
+            <p class="text-muted mb-1"><strong>@Model.Producto?.Nombre</strong></p>
+            <p class="text-muted mb-4">@(string.IsNullOrEmpty(Model.Descripcion) ? "Sin descripción" : Model.Descripcion)</p>
+
+            <div class="alert alert-warning">
+                Se eliminarán los <strong>@(Model.DetalleRecetas?.Count ?? 0) insumo(s)</strong> de la receta.
+            </div>
+
+            <form method="post" asp-action="Delete" asp-route-id="@Model.IdReceta">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-eliminar w-100 mb-2">Eliminar receta</button>
+                <a asp-action="Index" class="btn btn-link w-100">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

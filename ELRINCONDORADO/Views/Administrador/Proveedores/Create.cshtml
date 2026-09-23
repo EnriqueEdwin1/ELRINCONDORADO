@@ -1,0 +1,126 @@
+@model ELRINCONDORADO.Models.Proveedor
+@{
+    ViewData["Title"] = "Agregar Proveedor";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏠 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="form-card">
+            <h2>Agregar Proveedor</h2>
+            <form asp-action="Create" method="post">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Nombre" class="form-label">Nombre</label>
+                    <input asp-for="Nombre" class="form-control" placeholder="Ej: Distribuidora La Roca" required
+                           pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .-]+"
+                           title="El nombre no puede contener números." />
+                    <small class="text-danger d-none" id="ErrorNombre"></small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Telefono" class="form-label">Teléfono</label>
+                    <input asp-for="Telefono" class="form-control" type="tel" inputmode="numeric"
+                           placeholder="Ej: 04145551234" required
+                           pattern="\d{7,11}" maxlength="11"
+                           title="El teléfono debe tener entre 7 y 11 dígitos." />
+                    <small class="text-danger d-none" id="ErrorTelefono"></small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Direccion" class="form-label">Dirección</label>
+                    <textarea asp-for="Direccion" class="form-control" rows="2" placeholder="Ej: Av. Bolívar, Local 5"></textarea>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Email" class="form-label">Email</label>
+                    <input asp-for="Email" class="form-control" type="email" placeholder="Ej: ventas@empresa.com" required />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label asp-for="Observaciones" class="form-label">Observaciones</label>
+                    <textarea asp-for="Observaciones" class="form-control" rows="3" placeholder="Opcional"></textarea>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label asp-for="Estado" class="form-label">Estado</label>
+                    <select asp-for="Estado" class="form-select" required>
+                        <option value="ACTIVO">Activo</option>
+                        <option value="INACTIVO">Inactivo</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-guardar">Guardar</button>
+                <a asp-action="Index" class="btn btn-cancelar mt-2 text-center">Cancelar</a>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var nombre = document.getElementById('Nombre');
+            var msjNombre = document.getElementById('ErrorNombre');
+            if (nombre) {
+                nombre.addEventListener('keydown', function (e) {
+                    if (e.key >= '0' && e.key <= '9') e.preventDefault();
+                });
+                nombre.addEventListener('input', function () {
+                    if (/\d/.test(nombre.value)) {
+                        nombre.setCustomValidity('El nombre no puede contener números.');
+                        msjNombre.classList.remove('d-none');
+                        msjNombre.textContent = 'El nombre no puede contener números.';
+                    } else {
+                        nombre.setCustomValidity('');
+                        msjNombre.classList.add('d-none');
+                    }
+                });
+            }
+
+            var tel = document.getElementById('Telefono');
+            var msjTel = document.getElementById('ErrorTelefono');
+            if (tel) {
+                tel.addEventListener('keydown', function (e) {
+                    if (e.key.length === 1 && /\D/.test(e.key) && !e.ctrlKey && !e.metaKey) e.preventDefault();
+                });
+                tel.addEventListener('input', function () {
+                    tel.value = tel.value.replace(/\D/g, '');
+                    var ok = /^\d{7,11}$/.test(tel.value);
+                    if (tel.value.length) {
+                        tel.setCustomValidity(ok ? '' : 'El teléfono debe tener entre 7 y 11 dígitos.');
+                        msjTel.textContent = ok ? '' : 'El teléfono debe tener entre 7 y 11 dígitos.';
+                    } else {
+                        tel.setCustomValidity('');
+                        msjTel.textContent = '';
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

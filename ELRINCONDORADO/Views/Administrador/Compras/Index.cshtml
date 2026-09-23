@@ -1,0 +1,165 @@
+@model IEnumerable<ELRINCONDORADO.Models.Compra>
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Compras";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                Compras
+            </h2>
+            <div class="d-flex gap-2">
+                <a href="/Proveedores" class="btn btn-outline-secondary">Proveedores</a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalReporte">Reporte</button>
+                <a href="/Compras/Create" class="btn btn-modulo">Nueva compra</a>
+            </div>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["Mensaje"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Mensaje"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <input type="text" id="buscarCompra" class="form-control mb-3"
+               placeholder="Buscar compra por proveedor..." />
+
+        <table class="table table-crud" id="tablaCompras">
+            <thead>
+                <tr>
+                    <th>Nº</th>
+                    <th>Proveedor</th>
+                    <th>Empleado</th>
+                    <th>Fecha</th>
+                    <th>Ítems</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="fila-clic" data-proveedor="@item.Proveedor?.Nombre"
+                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdCompra })';">
+                        <td>@item.IdCompra.ToString("D4")</td>
+                        <td>@item.Proveedor?.Nombre</td>
+                        <td>@(item.Empleado != null ? $"{item.Empleado.Nombre} {item.Empleado.Apellido}" : "—")</td>
+                        <td>@item.FechaCompra.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@(item.DetallesCompras?.Count ?? 0)</td>
+                        <td>@MonedaHelper.FormatearBs(item.Total)</td>
+                        <td>
+                            <span class="badge-estado activo">@item.Estado</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal: seleccionar período del reporte -->
+    <div class="modal fade" id="modalReporte" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reporte de Compras</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <form id="formReporte" method="get" action="/Compras/Reporte" target="_blank">
+                    <div class="modal-body">
+                        <div class="form-group mb-3">
+                            <label class="form-label">Período</label>
+                            <select id="tipoReporte" name="tipo" class="form-control">
+                                <option value="dia">Día</option>
+                                <option value="mes">Mes</option>
+                            </select>
+                        </div>
+                        <div class="form-group mb-3" id="filaDia">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" id="repFechaDia" name="fecha" class="form-control" required />
+                        </div>
+                        <div class="form-group mb-3 d-none" id="filaMes">
+                            <label class="form-label">Mes</label>
+                            <input type="month" id="repFechaMes" name="fecha" class="form-control" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-cancelar" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-guardar">Generar PDF</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarCompra');
+            if (!buscar) return;
+            buscar.addEventListener('input', function () {
+                var filtro = buscar.value.toLowerCase();
+                document.querySelectorAll('#tablaCompras tbody tr').forEach(function (tr) {
+                    var nombre = tr.getAttribute('data-proveedor') || '';
+                    tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
+                });
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var hoy = new Date();
+            var mes = String(hoy.getMonth() + 1).padStart(2, '0');
+            document.getElementById('repFechaDia').value =
+                hoy.getFullYear() + '-' + mes + '-' + String(hoy.getDate()).padStart(2, '0');
+            document.getElementById('repFechaMes').value = hoy.getFullYear() + '-' + mes;
+
+            function actualizarPeríodo() {
+                var esMes = document.getElementById('tipoReporte').value === 'mes';
+                document.getElementById('filaMes').classList.toggle('d-none', !esMes);
+                document.getElementById('filaDia').classList.toggle('d-none', esMes);
+                document.getElementById('repFechaMes').disabled = !esMes;
+                document.getElementById('repFechaDia').disabled = esMes;
+            }
+
+            actualizarPeríodo();
+            document.getElementById('tipoReporte').addEventListener('change', actualizarPeríodo);
+        });
+    </script>
+</body>
+</html>

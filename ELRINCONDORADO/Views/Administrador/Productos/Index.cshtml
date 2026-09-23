@@ -1,0 +1,137 @@
+@model IEnumerable<ELRINCONDORADO.Models.Producto>
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Productos";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
+                Productos
+            </h2>
+            <div class="d-flex gap-2">
+                <a href="/Categorias" class="btn btn-outline-secondary">Categorías</a>
+                <a href="/Productos/Create" class="btn btn-modulo">Agregar producto</a>
+            </div>
+        </div>
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["Mensaje"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Mensaje"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <input type="text" id="buscarProducto" class="form-control mb-3"
+               placeholder="Buscar producto por nombre..." />
+
+        <table class="table table-crud" id="tablaProductos">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Imagen</th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Precio</th>
+                    <th>Receta</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr class="fila-clic" data-nombre="@item.Nombre"
+                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdProducto })';">
+                        <td>@item.IdProducto</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(item.ImagenUrl))
+                            {
+                                <img src="@item.ImagenUrl" alt="@item.Nombre" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>@(string.IsNullOrEmpty(item.Codigo) ? "—" : item.Codigo)</td>
+                        <td>@item.Nombre</td>
+                        <td>@item.Categoria?.Nombre</td>
+                        <td>@MonedaHelper.FormatearBs(item.Precio)</td>
+                        <td>
+                            @if (item.Receta != null)
+                            {
+                                <span class="badge-estado activo">Con receta</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.Activo)
+                            {
+                                <span class="badge-estado activo">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge-estado inactivo">Inactivo</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarProducto');
+            if (!buscar) return;
+            buscar.addEventListener('input', function () {
+                var filtro = buscar.value.toLowerCase();
+                document.querySelectorAll('#tablaProductos tbody tr').forEach(function (tr) {
+                    var nombre = tr.getAttribute('data-nombre') || '';
+                    tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
