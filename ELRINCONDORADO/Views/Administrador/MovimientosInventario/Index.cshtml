@@ -1,4 +1,4 @@
-@model IEnumerable<ELRINCONDORADO.Models.MovimientoInventario>
+@model ELRINCONDORADO.Models.MovimientosAdminViewModel
 @using ELRINCONDORADO.Helpers
 @{
     ViewData["Title"] = "Movimientos";
@@ -15,6 +15,45 @@
     <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/administrador.css" rel="stylesheet" />
     <link href="~/css/crud.css" rel="stylesheet" />
+    <style>
+        .panel-turno {
+            background: #ffffff;
+            border: 1px solid #e3e8f0;
+            border-left: 5px solid #28a745;
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .panel-turno h3 {
+            font-size: 1.15rem;
+            margin: 0;
+            color: #1f3d2b;
+        }
+        .panel-turno .subtitulo {
+            color: #6c757d;
+            font-size: 0.85rem;
+        }
+        .card-cierre {
+            border: 1px solid #e3e8f0;
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+        }
+        .card-cierre .cierre-header {
+            background: #f4f6fb;
+            padding: 0.85rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .card-cierre .cierre-header strong { color: #24436f; }
+        .card-cierre .cierre-total { color: #6c757d; font-size: 0.9rem; }
+        .tabla-simple th { font-size: 0.8rem; text-transform: uppercase; }
+        .badge-estado.salida { background: #fdeaea; color: #c0392b; border: 1px solid #e8b4b4; }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
@@ -46,69 +85,124 @@
             </div>
         }
 
-        <input type="text" id="buscarMovimiento" class="form-control mb-3"
-               placeholder="Buscar por insumo, empleado o motivo..." />
+        <!-- ============ TURNO ACTUAL (salidas sin cerrar) ============ -->
+        <div class="panel-turno">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+                <div>
+                    <h3>🟢 Turno actual (en curso)</h3>
+                    <div class="subtitulo">Salidas de inventario desde el último cierre de caja.</div>
+                </div>
+                <span class="badge text-bg-success">@Model.CantidadTurnoActual salida(s)</span>
+            </div>
 
-        <table class="table table-crud" id="tablaMovimientos">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Fecha</th>
-                    <th>Insumo</th>
-                    <th>Tipo</th>
-                    <th>Cantidad</th>
-                    <th>Empleado</th>
-                    <th>Motivo</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Model)
-                {
-                    <tr class="fila-clic" data-nombre="@(item.Insumo?.Nombre ?? "") @(item.Empleado?.Usuario ?? "") @(item.Motivo ?? "")"
-                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdMovimiento })';">
-                        <td>@item.IdMovimiento</td>
-                        <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
-                        <td>@(item.Insumo?.Nombre ?? "—")</td>
-                        <td>
-                            @if (item.TipoMovimiento == "SALIDA")
+            @if (Model.TurnoActual.Count == 0)
+            {
+                <div class="alert alert-light border mt-2 mb-0 text-center text-muted">No hay salidas en el turno actual.</div>
+            }
+            else
+            {
+                <table class="table table-crud tabla-simple mb-0 mt-2">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Insumo</th>
+                            <th>Tipo</th>
+                            <th>Cantidad</th>
+                            <th>Empleado</th>
+                            <th>Motivo</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.TurnoActual)
+                        {
+                            <tr>
+                                <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@(item.Insumo?.Nombre ?? "—")</td>
+                                <td><span class="badge-estado salida">Salida</span></td>
+                                <td>@MonedaHelper.FormatearNumero(item.Cantidad)</td>
+                                <td>@(item.Empleado?.Usuario ?? "—")</td>
+                                <td>@(item.Motivo ?? "—")</td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        <a asp-action="Details" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-detalle">Ver</a>
+                                        <a asp-action="Edit" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-editar">Editar</a>
+                                        <a asp-action="Delete" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-eliminar">Eliminar</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <!-- ============ CIERRES ANTERIORES ============ -->
+        <h4 class="mb-3" style="color:#24436f;">📁 Cierres anteriores</h4>
+
+        @if (Model.Cierres.Count == 0)
+        {
+            <div class="alert alert-light border text-center text-muted">Aún no hay cierres de caja registrados.</div>
+        }
+        else
+        {
+            @foreach (var cierre in Model.Cierres)
+            {
+                var movimientosCierre = cierre.Movimientos ?? new List<ELRINCONDORADO.Models.MovimientoInventario>();
+                <div class="card-cierre">
+                    <div class="cierre-header" data-bs-toggle="collapse" data-bs-target="#cierre-@cierre.IdCierre" aria-expanded="false" aria-controls="cierre-@cierre.IdCierre">
+                        <div>
+                            <strong>#@cierre.IdCierre</strong>
+                            <span class="ms-2 text-muted">@cierre.Fecha.ToString("dd/MM/yyyy HH:mm")</span>
+                            <span class="ms-3"><i>@(cierre.Empleado?.Usuario ?? "—")</i></span>
+                        </div>
+                        <span class="cierre-total">
+                            Total ventas: <strong>@MonedaHelper.FormatearBs(cierre.TotalVentas)</strong>
+                            · @movimientosCierre.Count salida(s)
+                            <i class="bi bi-chevron-down ms-1" style="font-size:0.7rem;"></i>
+                        </span>
+                    </div>
+                    <div class="collapse" id="cierre-@cierre.IdCierre">
+                        <div class="p-3" style="background:#fff;">
+                            @if (movimientosCierre.Count == 0)
                             {
-                                <span class="badge-estado inactivo">Salida</span>
+                                <div class="text-center text-muted py-2">Sin salidas en este cierre.</div>
                             }
                             else
                             {
-                                <span class="badge-estado activo">Entrada</span>
+                                <table class="table table-crud tabla-simple mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Insumo</th>
+                                            <th>Tipo</th>
+                                            <th>Cantidad</th>
+                                            <th>Empleado</th>
+                                            <th>Motivo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in movimientosCierre)
+                                        {
+                                            <tr>
+                                                <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
+                                                <td>@(item.Insumo?.Nombre ?? "—")</td>
+                                                <td><span class="badge-estado salida">Salida</span></td>
+                                                <td>@MonedaHelper.FormatearNumero(item.Cantidad)</td>
+                                                <td>@(item.Empleado?.Usuario ?? "—")</td>
+                                                <td>@(item.Motivo ?? "—")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
                             }
-                        </td>
-                        <td>@MonedaHelper.FormatearNumero(item.Cantidad)</td>
-                        <td>@(item.Empleado?.Usuario ?? "—")</td>
-                        <td>@(item.Motivo ?? "—")</td>
-                        <td>
-                            <div class="d-flex gap-1 justify-content-end">
-                                <a asp-action="Details" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-detalle">Ver</a>
-                                <a asp-action="Edit" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-editar">Editar</a>
-                                <a asp-action="Delete" asp-route-id="@item.IdMovimiento" class="btn btn-sm btn-eliminar">Eliminar</a>
-                            </div>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
     </div>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            var buscar = document.getElementById('buscarMovimiento');
-            if (!buscar) return;
-            buscar.addEventListener('input', function () {
-                var filtro = buscar.value.toLowerCase();
-                document.querySelectorAll('#tablaMovimientos tbody tr').forEach(function (tr) {
-                    var texto = tr.getAttribute('data-nombre') || '';
-                    tr.style.display = (texto.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
-                });
-            });
-        });
-    </script>
 </body>
 </html>

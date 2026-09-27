@@ -9,9 +9,11 @@ namespace ELRINCONDORADO.Models
         public decimal Cantidad { get; set; }
         public DateTime Fecha { get; set; } = DateTime.UtcNow;
         public string? Motivo { get; set; }
+        public int? IdCierre { get; set; }
 
         // Relaciones
         public Insumo? Insumo { get; set; }
         public Empleado? Empleado { get; set; }
+        public CierreCaja? Cierre { get; set; }
     }
 }

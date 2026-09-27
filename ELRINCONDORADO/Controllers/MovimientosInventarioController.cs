@@ -32,11 +32,34 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var movimientos = _context.MovimientosInventario
+            // Solo salidas (VENTA): el turno actual (sin cierre todavía) arriba, y los cierres anteriores debajo
+            var turnoActual = await _context.MovimientosInventario
                 .Include(m => m.Insumo)
                 .Include(m => m.Empleado)
-                .OrderByDescending(m => m.Fecha);
-            return View("~/Views/Administrador/MovimientosInventario/Index.cshtml", await movimientos.ToListAsync());
+                .Where(m => m.IdCierre == null && m.TipoMovimiento == "VENTA")
+                .OrderBy(m => m.Fecha)
+                .ToListAsync();
+
+            var cierres = await _context.CierresCaja
+                .Include(c => c.Empleado)
+                .Include(c => c.Movimientos)
+                    .ThenInclude(m => m.Insumo)
+                .Include(c => c.Movimientos)
+                    .ThenInclude(m => m.Empleado)
+                .OrderByDescending(c => c.Fecha)
+                .ToListAsync();
+            foreach (var cierre in cierres)
+                cierre.Movimientos = (cierre.Movimientos ?? new List<MovimientoInventario>())
+                    .OrderBy(m => m.Fecha).ToList();
+
+            var vm = new MovimientosAdminViewModel
+            {
+                TurnoActual = turnoActual,
+                Cierres = cierres,
+                CantidadTurnoActual = turnoActual.Count
+            };
+
+            return View("~/Views/Administrador/MovimientosInventario/Index.cshtml", vm);
         }
 
         // GET: MovimientosInventario/Details/5

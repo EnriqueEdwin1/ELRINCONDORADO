@@ -24,6 +24,11 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddControllersWithViews();
 
+// Aviso sonoro de "pedido nuevo pendiente" cada 10 s, solo mientras haya una pantalla de cocina
+// abierta (su latido llega a /Cocina/Ping). Suena en el equipo donde corre la app.
+builder.Services.AddSingleton<ELRINCONDORADO.Services.PantallaCocinaTracker>();
+builder.Services.AddHostedService<ELRINCONDORADO.Services.AvisoPedidosCocinaService>();
+
 // El POS del Cajero envía el token anti-falsificación como CABECERA (RequestVerificationToken)
 // con Content-Type application/json. Por defecto .NET solo acepta el token como campo de formulario,
 // así que hay que decirle explícitamente que lo lea de esa cabecera, o el POST Facturar responde 400.

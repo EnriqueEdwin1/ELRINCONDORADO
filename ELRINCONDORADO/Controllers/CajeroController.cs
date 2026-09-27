@@ -124,7 +124,7 @@ namespace ELRINCONDORADO.Controllers
             var idEmpleado = ObtenerIdEmpleado();
             decimal subtotal = 0;
             var detalles = new List<DetallePedido>();
-            var movimientos = new List<MovimientoInventario>();
+            var totalesInsumo = new Dictionary<int, decimal>();
 
             foreach (var item in items)
             {
@@ -148,7 +148,9 @@ namespace ELRINCONDORADO.Controllers
                         : item.Observacion.Trim()
                 });
 
-                // Descontar insumos según la receta del producto: cantidad_receta x unidades vendidas
+                // Descontar insumos según la receta del producto: cantidad_receta x unidades vendidas.
+                // Los movimientos se acumulan por insumo dentro del turno abierto (un solo registro
+                // por insumo cuyas cantidades van sumándose hasta el próximo cierre de caja).
                 if (producto.Receta?.DetalleRecetas != null && idEmpleado.HasValue)
                 {
                     foreach (var dr in producto.Receta.DetalleRecetas)
@@ -163,15 +165,9 @@ namespace ELRINCONDORADO.Controllers
 
                         insumo.StockActual -= totalInsumo;
 
-                        movimientos.Add(new MovimientoInventario
-                        {
-                            IdInsumo = dr.IdInsumo,
-                            IdEmpleado = idEmpleado.Value,
-                            TipoMovimiento = "VENTA",
-                            Cantidad = totalInsumo,
-                            Fecha = DateTime.UtcNow,
-                            Motivo = $"VENTA - pedido de {modelo.NombrePedido}"
-                        });
+                        totalesInsumo[dr.IdInsumo] = totalesInsumo.TryGetValue(dr.IdInsumo, out var ya)
+                            ? ya + totalInsumo
+                            : totalInsumo;
                     }
                 }
             }
@@ -263,9 +259,34 @@ namespace ELRINCONDORADO.Controllers
             });
             await _context.SaveChangesAsync();
 
-            if (movimientos.Count > 0)
+            // Acumular las salidas del turno: si el insumo ya tiene un movimiento abierto (sin cierre),
+            // se suma la cantidad al mismo registro; si no, se crea el registro de ese insumo.
+            if (totalesInsumo.Count > 0 && idEmpleado.HasValue)
             {
-                _context.MovimientosInventario.AddRange(movimientos);
+                foreach (var kv in totalesInsumo)
+                {
+                    var mov = await _context.MovimientosInventario
+                        .FirstOrDefaultAsync(m => m.IdCierre == null
+                            && m.TipoMovimiento == "VENTA"
+                            && m.IdInsumo == kv.Key);
+                    if (mov != null)
+                    {
+                        mov.Cantidad += kv.Value;
+                        mov.Fecha = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        _context.MovimientosInventario.Add(new MovimientoInventario
+                        {
+                            IdInsumo = kv.Key,
+                            IdEmpleado = idEmpleado.Value,
+                            TipoMovimiento = "VENTA",
+                            Cantidad = kv.Value,
+                            Fecha = DateTime.UtcNow,
+                            Motivo = "VENTA - acumulado del turno"
+                        });
+                    }
+                }
                 await _context.SaveChangesAsync();
             }
 
@@ -358,7 +379,8 @@ namespace ELRINCONDORADO.Controllers
                 cfg.Valor = siguiente.ToString();
         }
 
-        // POST: Cajero/CierreCaja -> requiere la contraseña del administrador; reinicia la
+        // POST: Cajero/CierreCaja -> requiere la contraseña del administrador; cierra el turno:
+        // guarda el corte en cierres_caja, vincula las salidas del turno a ese corte, reinicia la
         // numeración de facturas (empieza en 1) y muestra el reporte del día.
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -372,6 +394,25 @@ namespace ELRINCONDORADO.Controllers
                 TempData["Error"] = "Contraseña de administrador incorrecta. No se realizó el cierre de caja.";
                 return RedirectToAction(nameof(Index));
             }
+
+            var vm = await ConstruirCierreCaja();
+
+            // Guardar el corte: cada cierre es un "turno" que agrupa los movimientos que salieron
+            var cierre = new CierreCaja
+            {
+                Fecha = DateTime.UtcNow,
+                IdEmpleado = ObtenerIdEmpleado() ?? 0,
+                TotalVentas = vm.Total
+            };
+            _context.CierresCaja.Add(cierre);
+            await _context.SaveChangesAsync();
+
+            // Vincular todas las salidas (VENTA) aún abiertas al corte recién creado
+            var movimientos = await _context.MovimientosInventario
+                .Where(m => m.IdCierre == null && m.TipoMovimiento == "VENTA")
+                .ToListAsync();
+            foreach (var m in movimientos)
+                m.IdCierre = cierre.IdCierre;
 
             // Reiniciar el contador: la siguiente factura (después del cierre) será la Nº 0001
             var clave = "proximo_numero_pedido";

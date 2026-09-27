@@ -86,6 +86,33 @@
         .btn-listp { background: linear-gradient(135deg, #27ae60, #1e8449); }
         .btn-cocina:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 6px 14px rgba(0,0,0,.15); }
         .pie-tiempo { font-size: 13px; color: #9c8b73; padding: 10px 18px; border-top: 1px solid #f0ead9; background: #fdfbf5; }
+        /* Pedido PENDIENTE sin atender: parpadea en rojo hasta que lo marcan EN PREPARACION */
+        .pedido-card.pedido-blink {
+            animation: blinkPendiente 1s steps(2, start) infinite;
+        }
+        @@keyframes blinkPendiente {
+            0%, 49% { background: #fff; border-left-color: #e74c3c; }
+            50%, 100% { background: #ffd9d9; border-left-color: #a00; }
+        }
+        #vozIndicador {
+            position: fixed; bottom: 14px; right: 16px; z-index: 9999;
+            background: #2c3e50; color: #fff; padding: 8px 14px; border-radius: 20px;
+            font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.25);
+            display: inline-block; cursor: pointer; user-select: none;
+        }
+        #panelVoz {
+            position: fixed; bottom: 58px; right: 16px; z-index: 9998; width: 400px; max-height: 420px;
+            overflow: auto; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0,0,0,.25); padding: 12px 14px; font-size: 12px; display: none;
+            line-height: 1.45; text-align: left;
+        }
+        #panelVoz .pv-tit { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
+        #panelVoz .pv-tit button { border: none; background: #eee; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-weight: 700; }
+        #btnProbarVoz { background: #2ecc71; color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; margin: 4px 0 10px; }
+        #btnProbarVoz:hover { filter: brightness(1.05); }
+        #panelVoz .pv-bit { margin-top: 8px; font-weight: 700; }
+        #panelVoz .pv-val { font-weight: 400; }
+        #panelVoz .pv-voces, #panelVoz .pv-log { background: #f7f7f7; border: 1px solid #eee; border-radius: 6px; padding: 6px 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
     </style>
 </head>
 <body>
@@ -126,7 +153,7 @@
 
         @if (!hayPedidos)
         {
-            <div class="vacio-cocina">
+            <div class="vacio-cocina" id="colaVacia">
                 <div class="emblema">👨‍🍳</div>
                 <h4 class="mt-3 mb-1">La cocina está al día</h4>
                 <p class="mb-0">No hay pedidos pendientes. Cuando el cajero factura un pedido, aparece aquí en la cola.</p>
@@ -134,11 +161,12 @@
         }
         else
         {
-            <div class="row">
+            <div class="row" id="colaPedidos">
                 @foreach (var pedido in Model)
                 {
                     var clase = pedido.Estado == "LISTO" ? "listo"
                         : pedido.Estado == "EN PREPARACION" ? "prep"
+                        : pedido.Estado == "PENDIENTE" ? "urgente pedido-blink"
                         : "urgente";
                     var detalle = pedido.DetallesPedidos ?? Enumerable.Empty<DetallePedido>();
                     var total = pedido.Total > 0 ? pedido.Total : (pedido.Subtotal - pedido.Descuento);
@@ -221,6 +249,331 @@
         }
     </div>
 
+    <div id="fToken" style="display:none;">@Html.AntiForgeryToken()</div>
+    <div id="vozIndicador">🔕 Activar voz</div>
+    <div id="panelVoz">
+        <div class="pv-tit"><strong>Avisos de voz</strong><button type="button" id="btnCerrarVoz">✕</button></div>
+        <button type="button" id="btnProbarVoz">▶ Probar aviso</button>
+        <div class="pv-bit">Estado: <span class="pv-val" id="pvSpeaking">?</span></div>
+        <div class="pv-bit">Avisos reproducidos:</div>
+        <div class="pv-log" id="pvLog">(aún ninguno)</div>
+        <div class="pv-bit">Diagnóstico:</div>
+        <div class="pv-log" id="pvDiag"></div>
+    </div>
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ================= Aviso de pedido pendiente =================
+        // El aviso sonoro LO REPRODUCE LA APLICACIÓN (Services/AvisoPedidosCocinaService) por
+        // las bocinas de Windows, porque Chrome bloquea el audio automático si la pestaña no
+        // tuvo un clic previo. Aquí solo se lleva el control de la pantalla; este bloque queda
+        // para diagnosis y para el botón de prueba manual.
+        var AVISO_AUTOMATICO_EN_NAVEGADOR = false;
+        var AUDIO_AVISO = '/audio/pedidos/nuevo.wav';
+
+        // Chrome solo reproduce audio si el ELEMENTO ya quedó desbloqueado por un gesto del
+        // usuario (el desbloqueo no es global de la página), por eso se reutiliza siempre el
+        // mismo <audio>: el primer clic lo desbloquea y ese mismo elemento avisa cada ciclo.
+        var elVoz = null;
+        function obtenerReproductor() {
+            if (elVoz) return elVoz;
+            elVoz = document.createElement('audio');
+            elVoz.preload = 'auto';
+            elVoz.style.display = 'none';
+            document.body.appendChild(elVoz);
+            return elVoz;
+        }
+
+        var vozActivada = false;
+        var conexionOk = true;
+        var mensajeConexion = '';
+        function pintarIndicador() {
+            var el = document.getElementById('vozIndicador');
+            if (!el) return;
+            el.style.display = 'inline-block';
+            if (!conexionOk) {
+                el.textContent = '⚠ sin conexión';
+                el.title = mensajeConexion + ' — la pantalla no puedeActualizar la cola';
+            } else {
+                el.textContent = vozActivada ? '🔊 Voz activa' : '🔕 Activar voz';
+                el.title = 'Avisos de pedido pendiente';
+            }
+        }
+        function activarVozAutomatica() {
+            if (!vozActivada) {
+                vozActivada = true;
+                try {
+                    // Desbloqueo real: se reproduce un silencio mudo y se detiene de inmediato.
+                    var a = obtenerReproductor();
+                    a.src = '/audio/pedidos/silencio.wav';
+                    a.muted = true;
+                    var p = a.play();
+                    setTimeout(function () { a.pause(); a.currentTime = 0; a.muted = false; }, 100);
+                    if (p && p.catch) p.catch(function () { });
+                } catch (e) { }
+            }
+            pintarIndicador();
+        }
+        window.addEventListener('pointerdown', activarVozAutomatica);
+        window.addEventListener('keydown', activarVozAutomatica);
+
+        var elVozIndicador = document.getElementById('vozIndicador');
+        if (elVozIndicador) elVozIndicador.addEventListener('click', alternarPanelVoz);
+        var btnCerrarVoz = document.getElementById('btnCerrarVoz');
+        if (btnCerrarVoz) btnCerrarVoz.addEventListener('click', function () {
+            document.getElementById('panelVoz').style.display = 'none';
+        });
+        var btnProbarVoz = document.getElementById('btnProbarVoz');
+        if (btnProbarVoz) btnProbarVoz.addEventListener('click', probarVoz);
+
+        function indicarVoz() {
+            pintarIndicador();
+        }
+
+        // Si la cola no llega (app reiniciada, sesión vencida, sin red) se avisa en pantalla en
+        // lugar de fallar en silencio: antes el tablero quedaba congelado sin explicar por qué.
+        var ultimoAvisoConexion = 0;
+        function avisarConexion(mensaje) {
+            conexionOk = false;
+            mensajeConexion = mensaje;
+            pintarIndicador();
+            var ahora = Date.now();
+            if (ahora - ultimoAvisoConexion < 5000) return;  // no repetir en cada poll
+            ultimoAvisoConexion = ahora;
+            anotar('⚠ ' + mensaje);
+        }
+
+        // ---- Diagnóstico interno (lo que la pantalla está viendo ahora mismo) ----
+        var diag = { intentos: 0, rechazos: 0, sonando: false, ultimoError: '-', ultimoCiclo: '-' };
+        function pintarDiagnostico() {
+            var el = document.getElementById('pvDiag');
+            if (!el) return;
+            var pend = ultimosPendientes.length;
+            var descarga = (window.performance && performance.getEntriesByType)
+                ? (performance.getEntriesByType('resource').filter(function (r) {
+                    return r.name.indexOf('nuevo.wav') >= 0;
+                }).pop() || null)
+                : null;
+            el.innerHTML =
+                'cola: ' + (horaUltimaCola ? horaUltimaCola.toLocaleTimeString() : 'nunca') +
+                ' · pendientes: <b>' + pend + '</b>' +
+                '<br>avisos intentados: ' + diag.intentos + ' · rechazados: ' + diag.rechazos +
+                ' · último error: ' + esc(diag.ultimoError) +
+                '<br>último ciclo 10 s: ' + diag.ultimoCiclo +
+                '<br>voz desbloqueada: ' + (vozActivada ? 'sí' : 'NO (falta un clic)') +
+                ' · pestaña visible: ' + (document.visibilityState === 'visible' ? 'sí' : 'NO (oculta)') +
+                ' · ventana con foco: ' + (document.hasFocus() ? 'sí' : 'no') +
+                '<br>audio descargado: ' + (descarga ? Math.round(descarga.duration) + ' ms' : 'aún no') +
+                ' · URLs http: ' + location.protocol;
+        }
+
+        // --- Diagnóstico en pantalla (clic en el indicador 🔊) ---
+        var logVoz = [];
+        function actualizarPanel() {
+            var vLog = document.getElementById('pvLog');
+            if (!vLog) return;
+            try {
+                var estado = document.getElementById('pvSpeaking');
+                if (estado) {
+                    if (!conexionOk) estado.textContent = '⚠ ' + mensajeConexion;
+                    else {
+                        var hora = horaUltimaCola ? horaUltimaCola.toLocaleTimeString() : '—';
+                        estado.textContent = (ultimosPendientes.length
+                            ? ('avisando · ' + ultimosPendientes.length + ' pendiente(s)')
+                            : 'sin pedidos pendientes') + ' · cola ' + hora;
+                    }
+                }
+                vLog.textContent = logVoz.length ? logVoz.join('\n') : '(aún ninguno)';
+                pintarDiagnostico();
+            } catch (e) { }
+        }
+        function alternarPanelVoz() {
+            var p = document.getElementById('panelVoz');
+            if (!p) return;
+            var abierto = p.style.display === 'block';
+            p.style.display = abierto ? 'none' : 'block';
+            if (!abierto) actualizarPanel();
+        }
+        function anotar(mensaje) {
+            logVoz.unshift(new Date().toLocaleTimeString() + ' · ' + mensaje);
+            logVoz = logVoz.slice(0, 8);
+            actualizarPanel();
+        }
+        function reproducirAviso() {
+            diag.intentos++;
+            var a = obtenerReproductor();
+            a.volume = 1;
+            a.src = AUDIO_AVISO;
+            var p = a.play();
+            if (p && p.then) {
+                p.then(function () {
+                    diag.sonando = true;
+                    diag.ultimoError = 'ninguno';
+                    actualizarPanel();
+                }).catch(function (err) {
+                    diag.rechazos++;
+                    diag.ultimoError = (err && err.name) || 'error';
+                    actualizarPanel();
+                });
+            } else {
+                diag.ultimoError = 'play() sin promesa';
+                actualizarPanel();
+            }
+            indicarVoz();
+        }
+        function probarVoz() {
+            // Este sí funciona siempre: el clic del usuario es el gesto que Chrome exige.
+            var a = new Audio(AUDIO_AVISO);
+            a.volume = 1;
+            var p = a.play();
+            if (p && p.catch) p.catch(function () { });
+            anotar('prueba manual');
+        }
+
+        // Ciclo de 10 segundos: si hay al menos un pedido PENDIENTE suena el aviso una vez.
+        var ultimosPendientes = [];
+        var cicloIniciado = false;
+        function anunciarCiclo() {
+            diag.ultimoCiclo = new Date().toLocaleTimeString();
+            if (ultimosPendientes.length === 0) return;
+            anotar('Pedido nuevo pendiente (suena en el equipo)');
+            if (AVISO_AUTOMATICO_EN_NAVEGADOR) reproducirAviso();
+        }
+
+        // ================= Tablero en vivo + anuncios =================
+        var contenedor = document.getElementById('colaPedidos');
+        var vacio = document.getElementById('colaVacia');
+        var contador = document.getElementById('contadorCola');
+        var token = (function () {
+            var el = document.querySelector('#fToken input');
+            return el ? el.value : '';
+        })();
+
+        // ids pendientes actuales (se refresca en cada poll; el ciclo de voz lo anuncia cada 10 s)
+        function esc(s) {
+            return (s == null ? '' : String(s)).replace(/[&<>"']/g,
+                function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+        }
+        function hiddenToken() {
+            return '<input type="hidden" name="__RequestVerificationToken" value="' + esc(token) + '" />';
+        }
+
+        function renderCola(datos) {
+            var hay = datos && datos.length > 0;
+            contador.textContent = hay ? datos.length : 0;
+            if (!hay) {
+                vacio.style.display = '';
+                contenedor.innerHTML = '';
+                return;
+            }
+            vacio.style.display = 'none';
+            var html = '<div class="row">';
+            datos.forEach(function (p) {
+                var esPreparacion = p.estado === 'EN PREPARACION';
+                var esPendiente = p.estado === 'PENDIENTE';
+                var claseCard = esPreparacion ? 'pedido-card prep'
+                    : esPendiente ? 'pedido-card urgente pedido-blink'
+                    : 'pedido-card urgente';
+                var claseChip = esPreparacion ? 'chip-prep' : 'chip-pendiente';
+                var chipTipo = p.tipoPedido === 'MESA'
+                    ? '<span class="chip-tipo" style="background:#e8f0e8;color:#2e6b1e;">🍽️ Mesa ' + (p.mesaNumero || 0) + '</span>'
+                    : '<span class="chip-tipo" style="background:#f5ecd3;color:#8a6d1a;">🥡 Para llevar</span>';
+                var pago = p.estadoPago === 'EFECTIVO' ? '<span class="ms-2">· 💵 Pago en efectivo</span>' : '';
+                var fecha = p.fechaCreacion ? new Date(p.fechaCreacion).toLocaleString('es-BO') : '';
+                var detalle = '';
+                (p.detalle || []).forEach(function (d) {
+                    detalle += '<div class="prod-linea"><div><span class="prod-cant">' + d.cantidad + ' ×</span>'
+                        + '<span class="prod-nombre">' + esc(d.nombre) + '</span>'
+                        + (d.observacion ? '<div class="prod-meta">📝 ' + esc(d.observacion) + '</div>' : '')
+                        + '</div></div>';
+                });
+                var acciones = '';
+                if (p.estado === 'PENDIENTE') {
+                    acciones = '<form method="post" action="/Cocina/CambiarEstado">'
+                        + '<input type="hidden" name="id" value="' + p.idPedido + '" />'
+                        + '<input type="hidden" name="estado" value="EN PREPARACION" />'
+                        + hiddenToken()
+                        + '<button type="submit" class="btn-cocina btn-preb w-100">👨‍🍳 Empezar</button></form>';
+                } else if (esPreparacion) {
+                    acciones = '<form method="post" action="/Cocina/CambiarEstado">'
+                        + '<input type="hidden" name="id" value="' + p.idPedido + '" />'
+                        + '<input type="hidden" name="estado" value="LISTO" />'
+                        + hiddenToken()
+                        + '<button type="submit" class="btn-cocina btn-listp w-100">✅ Marcarlo listo</button></form>';
+                }
+                html += '<div class="col-12 col-lg-6"><div class="' + claseCard + '">'
+                    + '<div class="pedido-head"><div><div class="pedido-num">🍽️ Pedido #' + p.idPedido + chipTipo + '</div>'
+                    + '<div class="pedido-cliente">👤 ' + esc(p.nombrePedido || 'Cliente')
+                    + (p.nombreCajero ? '<span> · Cajero: ' + esc(p.nombreCajero) + '</span>' : '')
+                    + '</div></div><span class="chip-estado ' + claseChip + '">' + esc(p.estado) + '</span></div>'
+                    + '<div class="pedido-body"><div class="detalle-productos">' + detalle + '</div>'
+                    + '<div class="pedido-acciones">' + acciones + '</div></div>'
+                    + '<div class="pie-tiempo">⏱️ Creado: ' + fecha + pago + '</div></div></div>';
+            });
+            html += '</div>';
+            contenedor.innerHTML = html;
+        }
+
+        var recargaHecha = false;
+        var horaUltimaCola = null;
+        function recargarPorSesion() {
+            if (recargaHecha) return;
+            recargaHecha = true;
+            var ultima = 0;
+            try { ultima = parseInt(sessionStorage.getItem('cocinaRecarga') || '0', 10) || 0; } catch (e) { }
+            if (Date.now() - ultima < 60000) return;   // ya se intentó hace menos de 1 min
+            try { sessionStorage.setItem('cocinaRecarga', String(Date.now())); } catch (e) { }
+            setTimeout(function () { location.reload(); }, 1200);
+        }
+        async function actualizarCola() {
+            try {
+                var res = await fetch('/Cocina/ActualizarCola', { cache: 'no-store' });
+                var texto = await res.text();
+                var datos = null;
+                try { datos = JSON.parse(texto); } catch (e) { datos = null; }
+                if (datos === null) {
+                    // Lo habitual es que la sesión haya vencido (el fetch devuelve el HTML del
+                    // login): en ese caso una recarga deja la pantalla funcionando sola.
+                    avisarConexion(res.redirected ? 'sesión vencida, recargando…' : 'el servidor no devolvió la cola');
+                    if (res.redirected) recargarPorSesion();
+                    return;
+                }
+                conexionOk = true;
+                horaUltimaCola = new Date();
+                pintarIndicador();
+                renderCola(datos);
+
+                // Refrescar la lista de pedidos PENDIENTE (el aviso de voz se dispara cada 10 s
+                // mientras esta lista tenga al menos uno).
+                ultimosPendientes = datos.filter(function (p) { return p.estado === 'PENDIENTE'; })
+                    .map(function (p) { return p.idPedido; });
+                actualizarPanel();
+
+                // Si ya hay pedidos pendientes al cargar, anunciar el primer aviso de inmediato.
+                if (!cicloIniciado && ultimosPendientes.length > 0) {
+                    cicloIniciado = true;
+                    anunciarCiclo();
+                }
+            } catch (e) {
+                avisarConexion('sin conexión con el servidor');
+            }
+        }
+
+        // Latido: mientras esta pantalla esté abierta, la app puede emitir el aviso sonoro.
+        // Si se cierra la pestaña o se navega a otra pantalla, deja de llegar y el aviso se detiene.
+        function latidoCocina() {
+            try {
+                fetch('/Cocina/Ping', { cache: 'no-store' }).catch(function () { });
+            } catch (e) { }
+        }
+
+        // Tablero: poll cada 2 s. Aviso de voz: uno cada 10 s si hay pedidos PENDIENTE.
+        actualizarCola();
+        latidoCocina();
+        setInterval(actualizarCola, 2000);
+        setInterval(latidoCocina, 10000);
+        setInterval(anunciarCiclo, 10000);
+        setInterval(pintarDiagnostico, 1000);   // el diagnóstico se refresca solo al abrirlo
+    </script>
 </body>
 </html>

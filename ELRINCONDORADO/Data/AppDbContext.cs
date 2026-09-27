@@ -30,6 +30,7 @@ namespace ELRINCONDORADO.Data
         public DbSet<DetalleCompra> DetallesCompras { get; set; }
         public DbSet<MovimientoInventario> MovimientosInventario { get; set; }
         public DbSet<Configuracion> Configuracion { get; set; }
+        public DbSet<CierreCaja> CierresCaja { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -68,6 +69,7 @@ namespace ELRINCONDORADO.Data
             modelBuilder.Entity<DetalleCompra>().HasKey(e => e.IdDetalleCompra);
             modelBuilder.Entity<MovimientoInventario>().HasKey(e => e.IdMovimiento);
             modelBuilder.Entity<Configuracion>().HasKey(e => e.Clave);
+            modelBuilder.Entity<CierreCaja>().HasKey(e => e.IdCierre);
 
             // Configurar relación 1:1 Producto - Receta
             modelBuilder.Entity<Receta>()
@@ -174,6 +176,16 @@ namespace ELRINCONDORADO.Data
                 .WithMany(e => e.MovimientosInventario)
                 .HasForeignKey(m => m.IdEmpleado);
 
+            modelBuilder.Entity<CierreCaja>()
+                .HasOne(c => c.Empleado)
+                .WithMany()
+                .HasForeignKey(c => c.IdEmpleado);
+            modelBuilder.Entity<MovimientoInventario>()
+                .HasOne(m => m.Cierre)
+                .WithMany(c => c.Movimientos)
+                .HasForeignKey(m => m.IdCierre)
+                .OnDelete(DeleteBehavior.SetNull);
+
             // ===== Nombres de tabla reales en la BD (todas en plural, snake_case) =====
             modelBuilder.Entity<Rol>().ToTable("roles");
             modelBuilder.Entity<Empleado>().ToTable("empleados");
@@ -195,6 +207,7 @@ namespace ELRINCONDORADO.Data
             modelBuilder.Entity<DetalleReceta>().ToTable("detalle_receta");
             modelBuilder.Entity<DetalleCompra>().ToTable("detalle_compras");
             modelBuilder.Entity<Configuracion>().ToTable("configuracion");
+            modelBuilder.Entity<CierreCaja>().ToTable("cierres_caja");
 
             // Mapeo snake_case para tablas y columnas (la BD usa minúsculas con guion bajo)
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -299,6 +312,11 @@ namespace ELRINCONDORADO.Data
             modelBuilder.Entity<MovimientoInventario>()
                 .Property(m => m.Cantidad)
                 .HasColumnType("numeric(12,3)");
+
+            // Configurar tabla CierresCaja
+            modelBuilder.Entity<CierreCaja>()
+                .Property(c => c.TotalVentas)
+                .HasColumnType("numeric(10,2)");
         }
 
         // Convierte un nombre PascalCase a snake_case, ej: IdEmpleado -> id_empleado
