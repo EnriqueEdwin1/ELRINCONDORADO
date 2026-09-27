@@ -1,0 +1,68 @@
+@model ELRINCONDORADO.Models.PromocionDetalleViewModel
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = "Eliminar Promoción";
+    Layout = null;
+    var promo = Model.Promocion;
+    var nombre = Context.Session.GetString("Nombre");
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/marca.css" />
+    <link rel="stylesheet" href="~/css/administrador.css" />
+</head>
+<body class="bg-admin">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h2 class="mb-0">Eliminar promoción</h2>
+            <div class="d-flex gap-2">
+                <a href="/Administrador" class="btn btn-sm btn-outline-secondary">⌂ Administración</a>
+                <a href="/Productos?pestana=promociones" class="btn btn-outline-secondary">Volver</a>
+            </div>
+        </div>
+
+        <div class="form-card p-4">
+            <div class="alert alert-danger">
+                <strong>¿Eliminar la promoción "@promo.Nombre"?</strong>
+                Esta acción no se puede deshacer. Se borrará de la tabla de promociones y sus
+                @Model.Incluidos.Count producto(s) dejarán de formar parte del paquete.
+            </div>
+
+            @if (!string.IsNullOrEmpty(promo.ImagenUrl))
+            {
+                <img src="@promo.ImagenUrl" class="img-thumbnail mb-3" style="max-height: 120px;" alt="@promo.Nombre" />
+            }
+
+            @if (Model.Incluidos.Any())
+            {
+                <p class="text-muted">Productos que dejarán de estar en la promoción:</p>
+                <ul class="mb-3">
+                    @foreach (var item in Model.Incluidos)
+                    {
+                        <li>@item.Nombre <span class="text-muted">x@item.Cantidad</span></li>
+                    }
+                </ul>
+            }
+
+            <p class="text-muted small">
+                Si la promoción ya se usó en pedidos facturados no se podrá eliminar;
+                en ese caso conviene pasarla a <strong>INACTIVA</strong> para que deje de aparecer en el cajero.
+            </p>
+
+            <form method="post" asp-action="PromocionDelete" asp-route-id="@promo.IdPromocion" class="d-flex gap-2 justify-content-end">
+                @Html.AntiForgeryToken()
+                <a href="/Productos?pestana=promociones" class="btn btn-outline-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

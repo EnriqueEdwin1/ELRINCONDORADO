@@ -32,11 +32,15 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            // Solo salidas (VENTA): el turno actual (sin cierre todavía) arriba, y los cierres anteriores debajo
+            // Movimientos: salidas por venta (turno actual arriba, cierres anteriores abajo),
+            // ajustes hechos al editar un insumo e ingresos al cancelar un pedido. Las compras
+            // (ENTRADA) quedan fuera a propósito: se ven en la pantalla de Compras.
+            var tiposVisibles = new[] { "VENTA", "AJUSTE", "INGRESO" };
+
             var turnoActual = await _context.MovimientosInventario
                 .Include(m => m.Insumo)
                 .Include(m => m.Empleado)
-                .Where(m => m.IdCierre == null && m.TipoMovimiento == "VENTA")
+                .Where(m => m.IdCierre == null && tiposVisibles.Contains(m.TipoMovimiento))
                 .OrderBy(m => m.Fecha)
                 .ToListAsync();
 
@@ -50,6 +54,7 @@ namespace ELRINCONDORADO.Controllers
                 .ToListAsync();
             foreach (var cierre in cierres)
                 cierre.Movimientos = (cierre.Movimientos ?? new List<MovimientoInventario>())
+                    .Where(m => tiposVisibles.Contains(m.TipoMovimiento))
                     .OrderBy(m => m.Fecha).ToList();
 
             var vm = new MovimientosAdminViewModel

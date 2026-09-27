@@ -15,11 +15,12 @@
     <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/administrador.css" rel="stylesheet" />
     <link href="~/css/crud.css" rel="stylesheet" />
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white">@nombre</span>
                 <form method="post" action="/Auth/Logout" style="display: inline;">
@@ -34,7 +35,6 @@
             <h2 class="mb-0">@Model.Nombre</h2>
             <div class="d-flex gap-2">
                 <a href="/Administrador" class="btn btn-sm btn-outline-secondary">← Volver a administración</a>
-                <a asp-action="Index" class="btn btn-outline-secondary">Volver</a>
                 <a asp-action="Edit" asp-route-id="@Model.IdProducto" class="btn btn-modulo">Editar</a>
                 <a asp-action="Delete" asp-route-id="@Model.IdProducto" class="btn btn-eliminar">Eliminar</a>
             </div>
@@ -88,6 +88,7 @@
             </div>
         </div>
 
+
         <div class="form-card p-3 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="mb-0">Receta del producto</h5>
@@ -140,8 +141,10 @@
             else
             {
                 <div class="alert alert-warning mb-0">
-                    Este producto no tiene una receta asociada todavía.
-                    <a href="/Recetas/Create?idProducto=@Model.IdProducto">Agregar receta</a>.
+                    <span>
+                        Este producto no tiene una receta asociada todavía.
+                        <a href="/Recetas/Create?idProducto=@Model.IdProducto">Agregar receta</a>.
+                    </span>
                 </div>
             }
         </div>

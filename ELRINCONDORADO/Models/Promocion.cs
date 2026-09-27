@@ -12,6 +12,9 @@ namespace ELRINCONDORADO.Models
         public TimeSpan? HoraInicio { get; set; }
         public TimeSpan? HoraFin { get; set; }
         public string Estado { get; set; } = "ACTIVA";
+        public string? ImagenUrl { get; set; }
+        public string? DisplayUrl { get; set; }
+        public string? DeleteUrl { get; set; }
 
         // Relaciones
         public ICollection<DetallePromocion>? DetallePromociones { get; set; }

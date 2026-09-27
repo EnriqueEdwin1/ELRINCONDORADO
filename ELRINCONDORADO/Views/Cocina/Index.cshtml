@@ -7,7 +7,9 @@
     var nombre = Context.Session.GetString("Nombre");
     var rol = Context.Session.GetString("Rol");
     var hayPedidos = Model != null && Model.Any();
+    var listos = hayPedidos ? Model.Count(p => p.Estado == "LISTO") : 0;
 }
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -40,6 +42,7 @@
         .titulo-panel { font-weight: 800; color: var(--marron); display: flex; align-items: center; gap: 10px; }
         .titulo-panel small { color: #9c8b73; font-weight: 600; }
         .badge-cola { background: #f2e7c9; color: var(--marron); font-weight: 700; padding: 6px 14px; border-radius: 20px; }
+        .badge-lista { background: #d5f0de; color: #1e7a45; font-weight: 700; padding: 6px 14px; border-radius: 20px; }
         .vacio-cocina {
             text-align: center; padding: 70px 20px; color: #9c8b73;
             border: 2px dashed #d9c9a3; border-radius: 16px; background: #fff;
@@ -50,11 +53,23 @@
             border-left: 6px solid var(--dorado); margin-bottom: 18px; overflow: hidden;
         }
         .pedido-card.urgente { border-left-color: #e67e22; }
-        .pedido-card.listo { border-left-color: #27ae60; }
+        /* Pedido LISTO: se queda en la cola en verde hasta que el mesero lo marque ENTREGADO */
+        .pedido-card.listo {
+            background: #eafaf0; border-left-color: #27ae60;
+            box-shadow: 0 3px 14px rgba(39,174,96,.18);
+        }
+        .pedido-card.listo .pedido-head { background: #dcf5e6; border-bottom-color: #bfe8d0; }
+        .pedido-card.listo .pedido-num { color: #1e7a45; }
+        .pedido-card.listo .prod-nombre { color: #1f6b40; }
+        .pedido-card.listo .prod-cant { color: #1e8449; }
+        .pedido-card.listo .prod-linea { border-bottom-color: #cdebd8; }
+        .pedido-card.listo .pie-tiempo { background: #e0f6e9; border-top-color: #bfe8d0; color: #5f7f6c; }
+        .espera-mesero { font-size: 12px; font-weight: 700; color: #1e7a45; text-align: center; }
         .pedido-head {
             border-bottom: 1px solid #f0ead9; padding: 12px 18px;
             display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
         }
+
         .pedido-num { font-weight: 800; color: var(--marron); font-size: 16px; }
         .pedido-cliente { color: #7a6a52; font-size: 13px; }
         .chip-estado {
@@ -85,6 +100,41 @@
         .btn-preb { background: linear-gradient(135deg, #f39c12, #e67e22); }
         .btn-listp { background: linear-gradient(135deg, #27ae60, #1e8449); }
         .btn-cocina:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 6px 14px rgba(0,0,0,.15); }
+        /* Campana: avisa por voz "Pedido número N listo" para que el mesero sepa cuál retirar */
+        .btn-campana {
+            border: none; color: #fff; font-weight: 800; padding: 10px 16px; border-radius: 10px;
+            width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+            font-size: 15px; background: linear-gradient(135deg, #2ecc71, #1e8449);
+            box-shadow: 0 4px 12px rgba(39,174,96,.35); transition: all .25s ease;
+        }
+        .btn-campana:hover { transform: translateY(-2px); filter: brightness(1.08); }
+        .btn-campana .campana-ico { font-size: 20px; }
+        .btn-campana.hablando { background: linear-gradient(135deg, #95a5a6, #7f8c8d); box-shadow: none; }
+        .btn-campana.avisado { background: linear-gradient(135deg, #27ae60, #145a32); }
+        .sin-voz {
+            font-size: 12px; font-weight: 700; color: #b03a2e; text-align: center; line-height: 1.35;
+        }
+        .estado-anuncio { font-size: 12px; font-weight: 700; color: #1e7a45; text-align: center; }
+        .btn-volver {
+            border: 1px solid #1e8449; background: #fff; color: #1e7a45; font-weight: 700;
+            font-size: 12px; padding: 5px 10px; border-radius: 8px; width: 100%;
+            transition: all .2s ease;
+        }
+        .btn-volver:hover { background: #eafaf0; transform: translateY(-1px); }
+        .btn-volver.preguntando { background: #fdf2e9; border-color: #c0392b; color: #922b21; }
+        .fila-confirmar {
+            background: #fff; border: 1px solid #e0b4b4; border-radius: 8px; padding: 8px;
+        }
+        .fc-pregunta { font-size: 12px; font-weight: 700; color: #922b21; text-align: center; margin-bottom: 7px; }
+        .fc-botones { display: flex; gap: 6px; }
+        .fc-si, .fc-no {
+            flex: 1; border: none; border-radius: 6px; padding: 7px 4px;
+            font-size: 12px; font-weight: 800; cursor: pointer; transition: filter .2s ease;
+        }
+        .fc-si { background: #c0392b; color: #fff; }
+        .fc-no { background: #ecf0f1; color: #566573; }
+        .fc-si:hover, .fc-no:hover { filter: brightness(1.08); }
+
         .pie-tiempo { font-size: 13px; color: #9c8b73; padding: 10px 18px; border-top: 1px solid #f0ead9; background: #fdfbf5; }
         /* Pedido PENDIENTE sin atender: parpadea en rojo hasta que lo marcan EN PREPARACION */
         .pedido-card.pedido-blink {
@@ -94,31 +144,14 @@
             0%, 49% { background: #fff; border-left-color: #e74c3c; }
             50%, 100% { background: #ffd9d9; border-left-color: #a00; }
         }
-        #vozIndicador {
-            position: fixed; bottom: 14px; right: 16px; z-index: 9999;
-            background: #2c3e50; color: #fff; padding: 8px 14px; border-radius: 20px;
-            font-size: 13px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,.25);
-            display: inline-block; cursor: pointer; user-select: none;
-        }
-        #panelVoz {
-            position: fixed; bottom: 58px; right: 16px; z-index: 9998; width: 400px; max-height: 420px;
-            overflow: auto; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 10px;
-            box-shadow: 0 6px 20px rgba(0,0,0,.25); padding: 12px 14px; font-size: 12px; display: none;
-            line-height: 1.45; text-align: left;
-        }
-        #panelVoz .pv-tit { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
-        #panelVoz .pv-tit button { border: none; background: #eee; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-weight: 700; }
-        #btnProbarVoz { background: #2ecc71; color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; margin: 4px 0 10px; }
-        #btnProbarVoz:hover { filter: brightness(1.05); }
-        #panelVoz .pv-bit { margin-top: 8px; font-weight: 700; }
-        #panelVoz .pv-val { font-weight: 400; }
-        #panelVoz .pv-voces, #panelVoz .pv-log { background: #f7f7f7; border: 1px solid #eee; border-radius: 6px; padding: 6px 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
     </style>
+
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Cocina">👩‍🍳 El Rincón Dorado · <span>Cocina</span></a>
+            <a class="navbar-brand" href="/Cocina"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span><span class="marca-modulo">Cocina</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white-50 me-2">👤 @(nombre ?? "Cocinero")</span>
                 <form method="post" action="/Auth/Logout">
@@ -133,8 +166,14 @@
             <h3 class="titulo-panel mb-0">
                 👨‍🍳 Cola de pedidos <small>· POS del cajero</small>
             </h3>
-            <a href="/Cocina/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorCola">@(hayPedidos ? Model.Count() : 0)</span> en cola</a>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="badge-lista" id="envoltorioListos" style="display:@(listos > 0 ? "" : "none");">
+                    ✅ <span id="contadorListos">@listos</span> listo@(listos == 1 ? "" : "s")
+                </span>
+                <a href="/Cocina/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorCola">@(hayPedidos ? Model.Count() : 0)</span> en cola</a>
+            </div>
         </div>
+
 
         @if (TempData["Exito"] != null)
         {
@@ -156,7 +195,8 @@
             <div class="vacio-cocina" id="colaVacia">
                 <div class="emblema">👨‍🍳</div>
                 <h4 class="mt-3 mb-1">La cocina está al día</h4>
-                <p class="mb-0">No hay pedidos pendientes. Cuando el cajero factura un pedido, aparece aquí en la cola.</p>
+                <p class="mb-0">No hay pedidos pendientes ni listos. Cuando el cajero factura un pedido aparece aquí en la cola, y se queda en verde hasta que el mesero lo retire.</p>
+
             </div>
         }
         else
@@ -233,7 +273,20 @@
                                             <button type="submit" class="btn-cocina btn-listp w-100">✅ Marcarlo listo</button>
                                         </form>
                                     }
+                                    @if (pedido.Estado == "LISTO")
+                                    {
+                                        <button type="button" class="btn-campana" data-anunciar="@pedido.IdPedido"
+                                                title="Avisar por voz que el pedido @pedido.IdPedido está listo">
+                                            <span class="campana-ico">🔔</span> Pedido @pedido.IdPedido listo
+                                        </button>
+                                        <div class="espera-mesero">Queda aquí hasta que el mesero lo retire 🍽️</div>
+                                        <button type="button" class="btn-volver" data-volver="@pedido.IdPedido"
+                                                title="Devolver el pedido @pedido.IdPedido a preparación por si se marcó listo antes de tiempo">
+                                            ↩ Volver a preparación
+                                        </button>
+                                    }
                                 </div>
+
                             </div>
                             <div class="pie-tiempo">
                                 ⏱️ Creado: @pedido.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
@@ -250,200 +303,28 @@
     </div>
 
     <div id="fToken" style="display:none;">@Html.AntiForgeryToken()</div>
-    <div id="vozIndicador">🔕 Activar voz</div>
-    <div id="panelVoz">
-        <div class="pv-tit"><strong>Avisos de voz</strong><button type="button" id="btnCerrarVoz">✕</button></div>
-        <button type="button" id="btnProbarVoz">▶ Probar aviso</button>
-        <div class="pv-bit">Estado: <span class="pv-val" id="pvSpeaking">?</span></div>
-        <div class="pv-bit">Avisos reproducidos:</div>
-        <div class="pv-log" id="pvLog">(aún ninguno)</div>
-        <div class="pv-bit">Diagnóstico:</div>
-        <div class="pv-log" id="pvDiag"></div>
-    </div>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+
     <script>
-        // ================= Aviso de pedido pendiente =================
-        // El aviso sonoro LO REPRODUCE LA APLICACIÓN (Services/AvisoPedidosCocinaService) por
-        // las bocinas de Windows, porque Chrome bloquea el audio automático si la pestaña no
-        // tuvo un clic previo. Aquí solo se lleva el control de la pantalla; este bloque queda
-        // para diagnosis y para el botón de prueba manual.
-        var AVISO_AUTOMATICO_EN_NAVEGADOR = false;
-        var AUDIO_AVISO = '/audio/pedidos/nuevo.wav';
-
-        // Chrome solo reproduce audio si el ELEMENTO ya quedó desbloqueado por un gesto del
-        // usuario (el desbloqueo no es global de la página), por eso se reutiliza siempre el
-        // mismo <audio>: el primer clic lo desbloquea y ese mismo elemento avisa cada ciclo.
-        var elVoz = null;
-        function obtenerReproductor() {
-            if (elVoz) return elVoz;
-            elVoz = document.createElement('audio');
-            elVoz.preload = 'auto';
-            elVoz.style.display = 'none';
-            document.body.appendChild(elVoz);
-            return elVoz;
-        }
-
-        var vozActivada = false;
-        var conexionOk = true;
-        var mensajeConexion = '';
-        function pintarIndicador() {
-            var el = document.getElementById('vozIndicador');
-            if (!el) return;
-            el.style.display = 'inline-block';
-            if (!conexionOk) {
-                el.textContent = '⚠ sin conexión';
-                el.title = mensajeConexion + ' — la pantalla no puedeActualizar la cola';
-            } else {
-                el.textContent = vozActivada ? '🔊 Voz activa' : '🔕 Activar voz';
-                el.title = 'Avisos de pedido pendiente';
-            }
-        }
-        function activarVozAutomatica() {
-            if (!vozActivada) {
-                vozActivada = true;
-                try {
-                    // Desbloqueo real: se reproduce un silencio mudo y se detiene de inmediato.
-                    var a = obtenerReproductor();
-                    a.src = '/audio/pedidos/silencio.wav';
-                    a.muted = true;
-                    var p = a.play();
-                    setTimeout(function () { a.pause(); a.currentTime = 0; a.muted = false; }, 100);
-                    if (p && p.catch) p.catch(function () { });
-                } catch (e) { }
-            }
-            pintarIndicador();
-        }
-        window.addEventListener('pointerdown', activarVozAutomatica);
-        window.addEventListener('keydown', activarVozAutomatica);
-
-        var elVozIndicador = document.getElementById('vozIndicador');
-        if (elVozIndicador) elVozIndicador.addEventListener('click', alternarPanelVoz);
-        var btnCerrarVoz = document.getElementById('btnCerrarVoz');
-        if (btnCerrarVoz) btnCerrarVoz.addEventListener('click', function () {
-            document.getElementById('panelVoz').style.display = 'none';
-        });
-        var btnProbarVoz = document.getElementById('btnProbarVoz');
-        if (btnProbarVoz) btnProbarVoz.addEventListener('click', probarVoz);
-
-        function indicarVoz() {
-            pintarIndicador();
-        }
-
-        // Si la cola no llega (app reiniciada, sesión vencida, sin red) se avisa en pantalla en
-        // lugar de fallar en silencio: antes el tablero quedaba congelado sin explicar por qué.
-        var ultimoAvisoConexion = 0;
-        function avisarConexion(mensaje) {
-            conexionOk = false;
-            mensajeConexion = mensaje;
-            pintarIndicador();
-            var ahora = Date.now();
-            if (ahora - ultimoAvisoConexion < 5000) return;  // no repetir en cada poll
-            ultimoAvisoConexion = ahora;
-            anotar('⚠ ' + mensaje);
-        }
-
-        // ---- Diagnóstico interno (lo que la pantalla está viendo ahora mismo) ----
-        var diag = { intentos: 0, rechazos: 0, sonando: false, ultimoError: '-', ultimoCiclo: '-' };
-        function pintarDiagnostico() {
-            var el = document.getElementById('pvDiag');
-            if (!el) return;
-            var pend = ultimosPendientes.length;
-            var descarga = (window.performance && performance.getEntriesByType)
-                ? (performance.getEntriesByType('resource').filter(function (r) {
-                    return r.name.indexOf('nuevo.wav') >= 0;
-                }).pop() || null)
-                : null;
-            el.innerHTML =
-                'cola: ' + (horaUltimaCola ? horaUltimaCola.toLocaleTimeString() : 'nunca') +
-                ' · pendientes: <b>' + pend + '</b>' +
-                '<br>avisos intentados: ' + diag.intentos + ' · rechazados: ' + diag.rechazos +
-                ' · último error: ' + esc(diag.ultimoError) +
-                '<br>último ciclo 10 s: ' + diag.ultimoCiclo +
-                '<br>voz desbloqueada: ' + (vozActivada ? 'sí' : 'NO (falta un clic)') +
-                ' · pestaña visible: ' + (document.visibilityState === 'visible' ? 'sí' : 'NO (oculta)') +
-                ' · ventana con foco: ' + (document.hasFocus() ? 'sí' : 'no') +
-                '<br>audio descargado: ' + (descarga ? Math.round(descarga.duration) + ' ms' : 'aún no') +
-                ' · URLs http: ' + location.protocol;
-        }
-
-        // --- Diagnóstico en pantalla (clic en el indicador 🔊) ---
-        var logVoz = [];
-        function actualizarPanel() {
-            var vLog = document.getElementById('pvLog');
-            if (!vLog) return;
-            try {
-                var estado = document.getElementById('pvSpeaking');
-                if (estado) {
-                    if (!conexionOk) estado.textContent = '⚠ ' + mensajeConexion;
-                    else {
-                        var hora = horaUltimaCola ? horaUltimaCola.toLocaleTimeString() : '—';
-                        estado.textContent = (ultimosPendientes.length
-                            ? ('avisando · ' + ultimosPendientes.length + ' pendiente(s)')
-                            : 'sin pedidos pendientes') + ' · cola ' + hora;
-                    }
-                }
-                vLog.textContent = logVoz.length ? logVoz.join('\n') : '(aún ninguno)';
-                pintarDiagnostico();
-            } catch (e) { }
-        }
-        function alternarPanelVoz() {
-            var p = document.getElementById('panelVoz');
-            if (!p) return;
-            var abierto = p.style.display === 'block';
-            p.style.display = abierto ? 'none' : 'block';
-            if (!abierto) actualizarPanel();
-        }
-        function anotar(mensaje) {
-            logVoz.unshift(new Date().toLocaleTimeString() + ' · ' + mensaje);
-            logVoz = logVoz.slice(0, 8);
-            actualizarPanel();
-        }
-        function reproducirAviso() {
-            diag.intentos++;
-            var a = obtenerReproductor();
-            a.volume = 1;
-            a.src = AUDIO_AVISO;
-            var p = a.play();
-            if (p && p.then) {
-                p.then(function () {
-                    diag.sonando = true;
-                    diag.ultimoError = 'ninguno';
-                    actualizarPanel();
-                }).catch(function (err) {
-                    diag.rechazos++;
-                    diag.ultimoError = (err && err.name) || 'error';
-                    actualizarPanel();
-                });
-            } else {
-                diag.ultimoError = 'play() sin promesa';
-                actualizarPanel();
-            }
-            indicarVoz();
-        }
-        function probarVoz() {
-            // Este sí funciona siempre: el clic del usuario es el gesto que Chrome exige.
-            var a = new Audio(AUDIO_AVISO);
-            a.volume = 1;
-            var p = a.play();
-            if (p && p.catch) p.catch(function () { });
-            anotar('prueba manual');
-        }
-
-        // Ciclo de 10 segundos: si hay al menos un pedido PENDIENTE suena el aviso una vez.
-        var ultimosPendientes = [];
-        var cicloIniciado = false;
-        function anunciarCiclo() {
-            diag.ultimoCiclo = new Date().toLocaleTimeString();
-            if (ultimosPendientes.length === 0) return;
-            anotar('Pedido nuevo pendiente (suena en el equipo)');
-            if (AVISO_AUTOMATICO_EN_NAVEGADOR) reproducirAviso();
-        }
-
+        // ================= Avisos =================
+        // El aviso de "pedido nuevo pendiente" lo reproduce la APLICACIÓN
+        // (Services/AvisoPedidosCocinaService) por las bocinas de Windows: Chrome bloquea el audio
+        // automático si la pestaña no tuvo un clic previo y ese aviso no puede perderse en silencio,
+        // porque la cocina no está mirando la pantalla.
+        //
+        // La campana del pedido listo es otra cosa: se pulsa a mano y habla el equipo con su propia
+        // voz. No lleva ningún sonido de fondo, para que no se mezcle con el aviso de pedido
+        // pendiente ni con otro pedido ya anunciado.
+        // La campana solo habla; el resto de esta pantalla no reproduce audio desde el navegador.
         // ================= Tablero en vivo + anuncios =================
         var contenedor = document.getElementById('colaPedidos');
         var vacio = document.getElementById('colaVacia');
         var contador = document.getElementById('contadorCola');
+        var contadorListos = document.getElementById('contadorListos');
+        var envoltorioListos = document.getElementById('envoltorioListos');
+
         var token = (function () {
             var el = document.querySelector('#fToken input');
             return el ? el.value : '';
@@ -458,9 +339,138 @@
             return '<input type="hidden" name="__RequestVerificationToken" value="' + esc(token) + '" />';
         }
 
+        // ================= Campana: "Pedido número N listo" =================
+        // La campana se pulsa a mano, así que el aviso por voz sale con el clic (Chrome no lo
+        // bloquea). La voz se lee del propio equipo con la voz de Windows, sin archivos ni red.
+        var vozEspanola = null;
+        function obtenerVozEspanola() {
+            if (!('speechSynthesis' in window)) return null;
+            var voces = window.speechSynthesis.getVoices() || [];
+            for (var i = 0; i < voces.length; i++) {
+                if (voces[i].lang && voces[i].lang.toLowerCase().indexOf('es') === 0) {
+                    vozEspanola = voces[i];
+                    break;
+                }
+            }
+            return vozEspanola;
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = function () { vozEspanola = null; obtenerVozEspanola(); };
+            obtenerVozEspanola();
+        }
+        function hayVoz() { return 'speechSynthesis' in window && window.SpeechSynthesisUtterance != null; }
+
+        // Los pedidos ya anunciados quedan marcados en la tarjeta (se borra solo al desaparecer).
+        var pedidosAvisados = {};
+        function marcarAvisado(btn, avisado) {
+            if (!btn) return;
+            btn.classList.toggle('avisado', !!avisado);
+            var pie = btn.parentNode ? btn.parentNode.querySelector('.estado-anuncio') : null;
+            if (!pie) {
+                pie = document.createElement('div');
+                pie.className = 'estado-anuncio';
+                btn.parentNode.appendChild(pie);
+            }
+            pie.className = avisado ? 'estado-anuncio' : 'estado-anuncio sin-voz';
+            pie.textContent = avisado
+                ? '✅ Avisado al mesero'
+                : '⚠ Este equipo no tiene voz en español para hablar';
+        }
+        function anunciarListo(idPedido) {
+            var btn = document.querySelector('#colaPedidos [data-anunciar="' + idPedido + '"]');
+            if (btn) btn.classList.add('hablando');
+
+            // Solo habla la voz: aquí no se reproduce ningún archivo de audio, porque se mezclaría
+            // con el aviso de pedido pendiente que suena en el equipo cada 10 s.
+            if (hayVoz()) {
+                try {
+                    window.speechSynthesis.cancel();
+                    var u = new SpeechSynthesisUtterance('Pedido número ' + idPedido + ' listo');
+                    var v = obtenerVozEspanola();
+                    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'es-ES'; }
+                    u.rate = 1; u.pitch = 1; u.volume = 1;
+                    u.onend = function () { if (btn) btn.classList.remove('hablando'); };
+                    u.onerror = function () { if (btn) btn.classList.remove('hablando'); };
+                    window.speechSynthesis.speak(u);
+                    pedidosAvisados[idPedido] = true;
+                    marcarAvisado(btn, true);
+                } catch (e) {
+                    if (btn) btn.classList.remove('hablando');
+                }
+            } else {
+                if (btn) btn.classList.remove('hablando');
+                marcarAvisado(btn, false);
+            }
+        }
+        if (contenedor) {
+            contenedor.addEventListener('click', function (ev) {
+                if (!ev.target.closest) return;
+                var si = ev.target.closest('[data-confirmar-si]');
+                if (si) { confirmarVolver(si.getAttribute('data-confirmar-si')); return; }
+                var no = ev.target.closest('[data-confirmar-no]');
+                if (no) { cerrarPregunta(); return; }
+                var volver = ev.target.closest('[data-volver]');
+                if (volver) { preguntarVolver(volver.getAttribute('data-volver')); return; }
+                var campana = ev.target.closest('[data-anunciar]');
+                if (campana) anunciarListo(campana.getAttribute('data-anunciar'));
+            });
+        }
+
+        // Volver a preparación deshace lo que hizo la cocina, así que no se manda en el primer clic:
+        // el botón abre la pregunta en la misma tarjeta y solo sale si se pulsa "Sí, volver".
+        // (Nada de window.confirm: el aviso del navegador tapa la tarjeta y en una pantalla de
+        // cocina molesta más de lo que ayuda.)
+        var pedidoConfirmando = null;
+        function filaPregunta(id) {
+            return '<div class="fila-confirmar" data-pregunta="' + id + '">'
+                + '<div class="fc-pregunta">¿Seguro que quieres devolver el pedido ' + id + ' a preparación?</div>'
+                + '<div class="fc-botones">'
+                + '<button type="button" class="fc-si" data-confirmar-si="' + id + '">Sí, volver</button>'
+                + '<button type="button" class="fc-no" data-confirmar-no="' + id + '">Cancelar</button>'
+                + '</div></div>';
+        }
+        function preguntarVolver(idPedido) {
+            if (pedidoConfirmando != null) cerrarPregunta();
+            var btn = document.querySelector('#colaPedidos [data-volver="' + idPedido + '"]');
+            if (!btn) return;
+            pedidoConfirmando = idPedido;
+            btn.classList.add('preguntando');
+            var div = document.createElement('div');
+            div.innerHTML = filaPregunta(idPedido);
+            btn.parentNode.appendChild(div.firstChild);
+        }
+        function cerrarPregunta() {
+            if (pedidoConfirmando != null) {
+                var btn = document.querySelector('#colaPedidos [data-volver="' + pedidoConfirmando + '"]');
+                if (btn) btn.classList.remove('preguntando');
+            }
+            pedidoConfirmando = null;
+            Array.prototype.forEach.call(
+                document.querySelectorAll('#colaPedidos .fila-confirmar'),
+                function (f) { f.parentNode.removeChild(f); });
+        }
+        function confirmarVolver(idPedido) {
+            cerrarPregunta();
+            delete pedidosAvisados[idPedido];
+            var f = document.createElement('form');
+            f.method = 'post';
+            f.action = '/Cocina/CambiarEstado';
+            f.innerHTML = '<input type="hidden" name="id" value="' + esc(idPedido) + '" />'
+                + '<input type="hidden" name="estado" value="EN PREPARACION" />'
+                + hiddenToken();
+            document.body.appendChild(f);
+            f.submit();
+        }
+
+
         function renderCola(datos) {
             var hay = datos && datos.length > 0;
+            var cuantosListos = hay ? datos.filter(function (p) { return p.estado === 'LISTO'; }).length : 0;
             contador.textContent = hay ? datos.length : 0;
+            if (contadorListos) {
+                contadorListos.textContent = cuantosListos;
+                if (envoltorioListos) envoltorioListos.style.display = cuantosListos ? '' : 'none';
+            }
             if (!hay) {
                 vacio.style.display = '';
                 contenedor.innerHTML = '';
@@ -471,10 +481,13 @@
             datos.forEach(function (p) {
                 var esPreparacion = p.estado === 'EN PREPARACION';
                 var esPendiente = p.estado === 'PENDIENTE';
-                var claseCard = esPreparacion ? 'pedido-card prep'
+                var esListo = p.estado === 'LISTO';
+                var claseCard = esListo ? 'pedido-card listo'
+                    : esPreparacion ? 'pedido-card prep'
                     : esPendiente ? 'pedido-card urgente pedido-blink'
                     : 'pedido-card urgente';
-                var claseChip = esPreparacion ? 'chip-prep' : 'chip-pendiente';
+                var claseChip = esListo ? 'chip-listp' : esPreparacion ? 'chip-prep' : 'chip-pendiente';
+
                 var chipTipo = p.tipoPedido === 'MESA'
                     ? '<span class="chip-tipo" style="background:#e8f0e8;color:#2e6b1e;">🍽️ Mesa ' + (p.mesaNumero || 0) + '</span>'
                     : '<span class="chip-tipo" style="background:#f5ecd3;color:#8a6d1a;">🥡 Para llevar</span>';
@@ -500,7 +513,28 @@
                         + '<input type="hidden" name="estado" value="LISTO" />'
                         + hiddenToken()
                         + '<button type="submit" class="btn-cocina btn-listp w-100">✅ Marcarlo listo</button></form>';
+                } else if (esListo) {
+                    var avisado = !!pedidosAvisados[p.idPedido];
+                    var preguntando = pedidoConfirmando == p.idPedido;
+                    acciones = '<button type="button" class="btn-campana' + (avisado ? ' avisado' : '') + '"'
+                        + ' data-anunciar="' + p.idPedido + '"'
+                        + ' title="Avisar por voz que el pedido ' + p.idPedido + ' está listo">'
+                        + '<span class="campana-ico">🔔</span> Pedido ' + p.idPedido + ' listo</button>'
+                        + '<div class="espera-mesero">Queda aquí hasta que el mesero lo retire 🍽️</div>'
+                        + (avisado ? '<div class="estado-anuncio">✅ Avisado al mesero</div>' : '')
+                        + '<button type="button" class="btn-volver' + (preguntando ? ' preguntando' : '') + '"'
+                        + ' data-volver="' + p.idPedido + '"'
+                        + ' title="Devolver el pedido ' + p.idPedido + ' a preparación por si se marcó listo antes de tiempo">'
+                        + '↩ Volver a preparación</button>'
+                        // El tablero se repinta cada 2 s, así que la pregunta abierta se vuelve a
+                        // dibujar: si no, el cocinero nunca alcanzaría a contestarla.
+                        + (preguntando ? filaPregunta(p.idPedido) : '');
                 }
+                if (!esListo) {
+                    delete pedidosAvisados[p.idPedido];
+                    if (pedidoConfirmando == p.idPedido) pedidoConfirmando = null;
+                }
+
                 html += '<div class="col-12 col-lg-6"><div class="' + claseCard + '">'
                     + '<div class="pedido-head"><div><div class="pedido-num">🍽️ Pedido #' + p.idPedido + chipTipo + '</div>'
                     + '<div class="pedido-cliente">👤 ' + esc(p.nombrePedido || 'Cliente')
@@ -515,7 +549,6 @@
         }
 
         var recargaHecha = false;
-        var horaUltimaCola = null;
         function recargarPorSesion() {
             if (recargaHecha) return;
             recargaHecha = true;
@@ -534,28 +567,12 @@
                 if (datos === null) {
                     // Lo habitual es que la sesión haya vencido (el fetch devuelve el HTML del
                     // login): en ese caso una recarga deja la pantalla funcionando sola.
-                    avisarConexion(res.redirected ? 'sesión vencida, recargando…' : 'el servidor no devolvió la cola');
                     if (res.redirected) recargarPorSesion();
                     return;
                 }
-                conexionOk = true;
-                horaUltimaCola = new Date();
-                pintarIndicador();
                 renderCola(datos);
-
-                // Refrescar la lista de pedidos PENDIENTE (el aviso de voz se dispara cada 10 s
-                // mientras esta lista tenga al menos uno).
-                ultimosPendientes = datos.filter(function (p) { return p.estado === 'PENDIENTE'; })
-                    .map(function (p) { return p.idPedido; });
-                actualizarPanel();
-
-                // Si ya hay pedidos pendientes al cargar, anunciar el primer aviso de inmediato.
-                if (!cicloIniciado && ultimosPendientes.length > 0) {
-                    cicloIniciado = true;
-                    anunciarCiclo();
-                }
             } catch (e) {
-                avisarConexion('sin conexión con el servidor');
+                // Sin banner: la cola se reintenta en el siguiente poll.
             }
         }
 
@@ -567,13 +584,48 @@
             } catch (e) { }
         }
 
-        // Tablero: poll cada 2 s. Aviso de voz: uno cada 10 s si hay pedidos PENDIENTE.
+        // ================= SignalR: Conexión en tiempo real =================
+        var connection = null;
+        async function iniciarSignalR() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('/pedidosHub')
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on('RecibirNuevoPedido', function (idPedido) {
+                    console.log('Nuevo pedido recibido:', idPedido);
+                    actualizarCola();
+                });
+
+                connection.on('RecibirCambioEstado', function (idPedido, estado) {
+                    console.log('Cambio de estado:', idPedido, estado);
+                    actualizarCola();
+                });
+
+                connection.onreconnected(function () {
+                    console.log('SignalR reconectado');
+                    connection.invoke('UnirseACocina');
+                });
+
+                await connection.start();
+                console.log('SignalR conectado');
+                await connection.invoke('UnirseACocina');
+            } catch (err) {
+                console.error('Error al conectar SignalR:', err);
+                setTimeout(iniciarSignalR, 5000);
+            }
+        }
+
+        // Iniciar SignalR
+        iniciarSignalR();
+
+        // Tablero: poll cada 2 s como respaldo. SignalR maneja las actualizaciones en tiempo real.
         actualizarCola();
         latidoCocina();
         setInterval(actualizarCola, 2000);
         setInterval(latidoCocina, 10000);
-        setInterval(anunciarCiclo, 10000);
-        setInterval(pintarDiagnostico, 1000);   // el diagnóstico se refresca solo al abrirlo
     </script>
+
 </body>
 </html>

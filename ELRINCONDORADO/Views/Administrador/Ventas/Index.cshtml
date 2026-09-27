@@ -1,20 +1,22 @@
-@model IEnumerable<ELRINCONDORADO.Models.Venta>
+@model ELRINCONDORADO.Models.VentasListaViewModel
+@using ELRINCONDORADO.Helpers
 @{
-    ViewData["Title"] = "Pedidos y Ventas";
+    ViewData["Title"] = "Ventas";
     Layout = null;
     var nombre = Context.Session.GetString("Nombre");
-    var rol = Context.Session.GetString("Rol");
-    var totalVentas = Model.Sum(v => v.Total);
+    var desde = Model.Desde?.ToString("yyyy-MM-dd") ?? "";
+    var hasta = Model.Hasta?.ToString("yyyy-MM-dd") ?? "";
 }
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@ViewData["Title"]</title>
     <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/crud.css" rel="stylesheet" />
     <style>
         .badge-estado {
             padding: 5px 12px;
@@ -24,8 +26,11 @@
             white-space: nowrap;
         }
         .badge-estado.pendiente { background: rgba(255, 193, 7, 0.18); color: #b8860b; }
-        .badge-estado.completado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .badge-estado.preparacion { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+        .badge-estado.listo { background: rgba(212, 175, 55, 0.25); color: #a17c00; }
+        .badge-estado.entregado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
         .badge-estado.cancelado { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+        .badge-estado.completado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
         .badge-estado.default { background: rgba(108, 117, 125, 0.13); color: #6c757d; }
         .table-ventas { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
         .table-ventas thead { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; }
@@ -37,14 +42,19 @@
         .chip-tipo.llevar { background: rgba(13, 110, 253, 0.10); color: #0d6efd; }
         .filtro-estado { border-radius: 20px; padding: 6px 14px; border: 1px solid #ced4da; background: white; font-size: 14px; }
         .filtro-estado:focus { outline: none; border-color: #d4af37; box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2); }
-        .resumen-ventas { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; border-radius: 12px; padding: 18px 24px; box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25); }
-        .resumen-ventas .valor { font-size: 26px; font-weight: 700; }
+        .filtro-fecha { border-radius: 20px; padding: 6px 14px; border: 1px solid #ced4da; background: white; font-size: 14px; }
+        .filtro-fecha:focus { outline: none; border-color: #d4af37; box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2); }
+        .resumen-ventas { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .resumen-ventas .rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; }
+        .resumen-ventas .valor { font-size: 20px; font-weight: 700; color: #b8941e; }
+        .btn-accion { font-size: 12px; font-weight: 600; border-radius: 8px; padding: 5px 10px; }
     </style>
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white">@nombre</span>
                 <form method="post" action="/Auth/Logout" style="display: inline;">
@@ -58,52 +68,145 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h2 class="mb-0">
                 <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
-                💳 Ventas
+                🧾 Ventas
             </h2>
-            <div class="d-flex gap-2">
-                <a href="/Pedidos" class="btn btn-modulo">Ver pedidos</a>
-            </div>
         </div>
 
-        <div class="resumen-ventas d-flex justify-content-between align-items-center mb-4">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Success"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        }
+
+        <!-- ============ FILTRO DE PERÍODO ============ -->
+        <form method="get" action="/Ventas" id="formPeriodo" class="resumen-ventas p-3 mb-3">
+            <div class="row g-2 align-items-end flex-wrap">
+                <div class="col-auto">
+                    <label for="desde" class="form-label small mb-1">Desde</label>
+                    <input type="date" id="desde" name="desde" class="filtro-fecha" value="@desde" />
+                </div>
+                <div class="col-auto">
+                    <label for="hasta" class="form-label small mb-1">Hasta</label>
+                    <input type="date" id="hasta" name="hasta" class="filtro-fecha" value="@hasta" />
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-modulo">Filtrar</button>
+                </div>
+                <div class="col-auto">
+                    <a href="/Ventas" class="btn btn-outline-secondary">Todo</a>
+                </div>
+                <div class="col-auto">
+                    <input type="text" id="buscarVenta" class="form-control" style="max-width: 260px;"
+                           placeholder="Buscar por cliente o nº..." />
+                </div>
+                <div class="col-auto">
+                    <select id="filtroEstado" class="filtro-estado">
+                        <option value="">Todos los estados</option>
+                        <option value="PENDIENTE">PENDIENTE</option>
+                        <option value="EN PREPARACION">EN PREPARACION</option>
+                        <option value="LISTO">LISTO</option>
+                        <option value="ENTREGADO">ENTREGADO</option>
+                        <option value="CANCELADO">CANCELADO</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        <!-- ============ RESUMEN DEL PERÍODO ============ -->
+        <div class="resumen-ventas p-3 mb-3 d-flex flex-wrap gap-4 align-items-center">
             <div>
-                <div class="text-uppercase small opacity-75">Ventas registradas</div>
-                <div class="valor">@Model.Count()</div>
+                <div class="rotulo">Período</div>
+                <div class="fw-bold">@Model.Periodo</div>
             </div>
-            <div class="text-end">
-                <div class="text-uppercase small opacity-75">Total ingresos</div>
-                <div class="valor">$@totalVentas.ToString("N0")</div>
+            <div>
+                <div class="rotulo">Pedidos</div>
+                <div class="fw-bold" id="totalPedidos">@Model.Cantidad</div>
             </div>
+            <div>
+                <div class="rotulo">Subtotal</div>
+                <div class="fw-bold">@MonedaHelper.FormatearBs(Model.Subtotal)</div>
+            </div>
+            @if (Model.Descuento > 0)
+            {
+                <div>
+                    <div class="rotulo">Descuentos</div>
+                    <div class="fw-bold">- @MonedaHelper.FormatearBs(Model.Descuento)</div>
+                </div>
+            }
+            <div>
+                <div class="rotulo">Total</div>
+                <div class="valor">@MonedaHelper.FormatearBs(Model.Total)</div>
+            </div>
+            @if (Model.Cancelados > 0)
+            {
+                <div class="text-muted small align-self-end">
+                    @Model.Cancelados pedido(s) cancelado(s): se ven en la lista pero no suman al total.
+                </div>
+            }
+        </div>
+
+        <div class="text-muted small mb-2">
+            Toque cualquier fila para abrir el detalle del pedido, ver sus productos y cancelarlo si necesita anularlo.
         </div>
 
         <div class="table-responsive">
-            <table class="table table-ventas mb-0">
+            <table class="table table-ventas mb-0" id="tablaVentas">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th>Nº</th>
+                        <th>Factura</th>
                         <th>Fecha</th>
-                        <th>Mesa</th>
+                        <th>Cliente</th>
+                        <th>Tipo</th>
                         <th>Atendió</th>
-                        <th>Pago</th>
                         <th>Estado</th>
+                        <th>Pago</th>
                         <th class="text-end">Total</th>
+                        <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in Model)
+                    @foreach (var item in Model.Pedidos)
                     {
                         var c = item.Estado switch
                         {
-                            "COMPLETADO" or "PAGADO" or "COBRADO" or "PAGADA" => "completado",
+                            "PENDIENTE" => "pendiente",
+                            "EN PREPARACION" => "preparacion",
+                            "LISTO" => "listo",
+                            "ENTREGADO" => "entregado",
+                            "CANCELADO" => "cancelado",
+                            _ => "default"
+                        };
+                        var cp = item.EstadoPago switch
+                        {
+                            "COMPLETADO" or "PAGADO" => "completado",
                             "CANCELADO" => "cancelado",
                             "PENDIENTE" => "pendiente",
                             _ => "default"
                         };
-                        <tr>
-                            <td>@item.IdVenta</td>
-                            <td>@item.FechaVenta.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        var cliente = !string.IsNullOrWhiteSpace(item.NombrePedido)
+                            ? item.NombrePedido
+                            : (!string.IsNullOrWhiteSpace(item.Cliente?.RazonSocial)
+                                ? item.Cliente.RazonSocial
+                                : "—");
+                        <tr class="fila-clic" data-cliente="@cliente"
+                            onclick="window.location.href='@Url.Action("Details", new { id = item.IdPedido })';">
+                            <td>#@item.IdPedido</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.NumeroPedido) ? "s/n" : item.NumeroPedido)</td>
+                            <td>@item.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@cliente</td>
                             <td>
-                                @if (item.Mesa != null)
+                                @if (item.TipoPedido == "MESA" && item.Mesa != null)
                                 {
                                     <span class="chip-tipo mesa">🍽️ Mesa @item.Mesa.Numero</span>
                                 }
@@ -113,15 +216,21 @@
                                 }
                             </td>
                             <td>@item.Empleado?.Nombre @item.Empleado?.Apellido</td>
-                            <td>@item.MetodoPago</td>
                             <td><span class="badge-estado @c">@item.Estado</span></td>
-                            <td class="text-end">$@item.Total.ToString("N0")</td>
+                            <td><span class="badge-estado @cp">@item.EstadoPago</span></td>
+                            <td class="text-end">@MonedaHelper.FormatearBs(item.Total)</td>
+                            <td class="text-end text-nowrap">
+                                <a href="/Ventas/FacturaVista/@item.IdPedido" target="_blank" class="btn btn-outline-primary btn-accion"
+                                   onclick="event.stopPropagation();">🖨 Factura</a>
+                            </td>
                         </tr>
                     }
-                    @if (!Model.Any())
+                    @if (!Model.Pedidos.Any())
                     {
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">Aún no hay ventas registradas.</td>
+                            <td colspan="10" class="text-center text-muted py-4">
+                                No hay ventas en el período seleccionado.
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -129,6 +238,31 @@
         </div>
     </div>
 
+
+    @* Modal de confirmacion de cancelacion (compartido con el detalle) *@
+    @{
+        ViewData["RangoDesde"] = Model.Desde?.ToString("yyyy-MM-dd");
+        ViewData["RangoHasta"] = Model.Hasta?.ToString("yyyy-MM-dd");
+    }
+    @await Html.PartialAsync("~/Views/Administrador/Ventas/_ModalCancelarPedido.cshtml")
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var buscar = document.getElementById('buscarVenta');
+            var filtro = document.getElementById('filtroEstado');
+            function aplicar() {
+                var q = buscar.value.toLowerCase();
+                var f = filtro.value;
+                document.querySelectorAll('#tablaVentas tbody tr').forEach(function (tr) {
+                    var texto = tr.innerText.toLowerCase();
+                    if (f && !texto.includes(f.toLowerCase())) { tr.style.display = 'none'; return; }
+                    tr.style.display = (q === '' || texto.includes(q)) ? '' : 'none';
+                });
+            }
+            buscar.addEventListener('input', aplicar);
+            filtro.addEventListener('change', aplicar);
+        });
+    </script>
 </body>
 </html>

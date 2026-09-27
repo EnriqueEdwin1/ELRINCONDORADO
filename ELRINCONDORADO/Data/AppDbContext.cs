@@ -15,12 +15,11 @@ namespace ELRINCONDORADO.Data
         public DbSet<Mesa> Mesas { get; set; }
         public DbSet<Categoria> Categorias { get; set; }
         public DbSet<Producto> Productos { get; set; }
-        public DbSet<Promocion> Promociones { get; set; }
+    public DbSet<Promocion> Promociones { get; set; }
         public DbSet<DetallePromocion> DetallePromociones { get; set; }
         public DbSet<Cliente> Clientes { get; set; }
         public DbSet<Pedido> Pedidos { get; set; }
         public DbSet<DetallePedido> DetallesPedidos { get; set; }
-        public DbSet<Venta> Ventas { get; set; }
         public DbSet<Insumo> Insumos { get; set; }
         public DbSet<DestinoInsumo> DestinosInsumos { get; set; }
         public DbSet<Receta> Recetas { get; set; }
@@ -54,12 +53,12 @@ namespace ELRINCONDORADO.Data
             modelBuilder.Entity<Mesa>().HasKey(e => e.IdMesa);
             modelBuilder.Entity<Categoria>().HasKey(e => e.IdCategoria);
             modelBuilder.Entity<Producto>().HasKey(e => e.IdProducto);
+            // Una promoción puede incluir varios productos: la clave es el par promoción + producto
             modelBuilder.Entity<Promocion>().HasKey(e => e.IdPromocion);
             modelBuilder.Entity<DetallePromocion>().HasKey(e => e.IdDetallePromocion);
             modelBuilder.Entity<Pedido>().HasKey(e => e.IdPedido);
             modelBuilder.Entity<Cliente>().HasKey(e => e.IdCliente);
             modelBuilder.Entity<DetallePedido>().HasKey(e => e.IdDetalle);
-            modelBuilder.Entity<Venta>().HasKey(e => e.IdVenta);
             modelBuilder.Entity<Insumo>().HasKey(e => e.IdInsumo);
             modelBuilder.Entity<DestinoInsumo>().HasKey(e => e.IdDestino);
             modelBuilder.Entity<Receta>().HasKey(e => e.IdReceta);
@@ -126,15 +125,6 @@ namespace ELRINCONDORADO.Data
                 .WithMany(p => p.DetallesPedidos)
                 .HasForeignKey(d => d.IdProducto);
 
-            modelBuilder.Entity<Venta>()
-                .HasOne(v => v.Mesa)
-                .WithMany(m => m.Ventas)
-                .HasForeignKey(v => v.IdMesa);
-            modelBuilder.Entity<Venta>()
-                .HasOne(v => v.Empleado)
-                .WithMany(e => e.Ventas)
-                .HasForeignKey(v => v.IdEmpleado);
-
             modelBuilder.Entity<DetalleReceta>()
                 .HasOne(d => d.Receta)
                 .WithMany(r => r.DetalleRecetas)
@@ -196,7 +186,6 @@ namespace ELRINCONDORADO.Data
             modelBuilder.Entity<DetallePromocion>().ToTable("detalle_promociones");
             modelBuilder.Entity<Pedido>().ToTable("pedidos");
             modelBuilder.Entity<Cliente>().ToTable("clientes");
-            modelBuilder.Entity<Venta>().ToTable("ventas");
             modelBuilder.Entity<Insumo>().ToTable("insumos");
             modelBuilder.Entity<DestinoInsumo>().ToTable("destinos_insumos");
             modelBuilder.Entity<Receta>().ToTable("recetas");
@@ -251,17 +240,6 @@ namespace ELRINCONDORADO.Data
                 .HasColumnType("numeric(10,2)");
             modelBuilder.Entity<DetallePedido>()
                 .Property(d => d.Subtotal)
-                .HasColumnType("numeric(10,2)");
-
-            // Configurar tabla Ventas
-            modelBuilder.Entity<Venta>()
-                .Property(v => v.Subtotal)
-                .HasColumnType("numeric(10,2)");
-            modelBuilder.Entity<Venta>()
-                .Property(v => v.Descuento)
-                .HasColumnType("numeric(10,2)");
-            modelBuilder.Entity<Venta>()
-                .Property(v => v.Total)
                 .HasColumnType("numeric(10,2)");
 
             // Configurar tabla Insumos

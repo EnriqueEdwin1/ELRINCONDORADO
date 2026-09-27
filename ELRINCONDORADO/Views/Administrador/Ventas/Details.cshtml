@@ -1,0 +1,217 @@
+@model ELRINCONDORADO.Models.Pedido
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = $"Pedido #{Model.IdPedido}";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+    var detalles = (Model.DetallesPedidos ?? new List<ELRINCONDORADO.Models.DetallePedido>())
+        .OrderBy(d => d.IdDetalle).ToList();
+    var cliente = !string.IsNullOrWhiteSpace(Model.NombrePedido)
+        ? Model.NombrePedido
+        : (!string.IsNullOrWhiteSpace(Model.Cliente?.RazonSocial) ? Model.Cliente.RazonSocial : "—");
+    var tipo = Model.TipoPedido == "MESA" && Model.Mesa != null
+        ? "Mesa " + Model.Mesa.Numero
+        : "Para llevar";
+    var c = Model.Estado switch
+    {
+        "PENDIENTE" => "pendiente",
+        "EN PREPARACION" => "preparacion",
+        "LISTO" => "listo",
+        "ENTREGADO" => "entregado",
+        "CANCELADO" => "cancelado",
+        _ => "default"
+    };
+    var cancelado = Model.Estado == "CANCELADO";
+    var numeroFactura = string.IsNullOrWhiteSpace(Model.NumeroPedido) ? "s/n" : Model.NumeroPedido;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <style>
+        .badge-estado { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-estado.pendiente { background: rgba(255, 193, 7, 0.18); color: #b8860b; }
+        .badge-estado.preparacion { background: rgba(13, 110, 253, 0.12); color: #0d6efd; }
+        .badge-estado.listo { background: rgba(212, 175, 55, 0.25); color: #a17c00; }
+        .badge-estado.entregado { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+        .badge-estado.cancelado { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+        .badge-estado.default { background: rgba(108, 117, 125, 0.13); color: #6c757d; }
+        .panel-detalle { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; }
+        .tabla-items { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+        .tabla-items thead { background: linear-gradient(135deg, #d4af37 0%, #b8941e 100%); color: white; }
+        .tabla-items thead th { font-weight: 600; border: none; padding: 12px; }
+        .tabla-items tbody td { padding: 10px 12px; border-top: 1px solid #f0f0f0; vertical-align: middle; }
+        .total-final { font-size: 22px; font-weight: 700; color: #b8941e; }
+        .btn-cancelar-pedido { background: #fff; color: #c92a2a; border: 1px solid #c92a2a; border-radius: 10px; padding: 8px 16px; font-weight: 600; }
+        .btn-cancelar-pedido:hover { background: #c92a2a; color: #fff; }
+    </style>
+    <link href="~/css/marca.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h2 class="mb-0">
+                <a href="/Ventas" class="btn btn-sm btn-outline-secondary me-2">← Ventas</a>
+                Pedido #@Model.IdPedido
+            </h2>
+            <div class="d-flex gap-2 flex-wrap">
+                <a href="/Ventas/FacturaVista/@Model.IdPedido" target="_blank" class="btn btn-modulo">🖨 Imprimir factura</a>
+                <a href="/Ventas/Factura/@Model.IdPedido" target="_blank" class="btn btn-outline-warning">📄 Descargar PDF</a>
+                @if (!cancelado)
+                {
+                    <button type="button" class="btn btn-cancelar-pedido js-cancelar"
+                            data-id="@Model.IdPedido"
+                            data-factura="@numeroFactura"
+                            data-cliente="@cliente"
+                            data-total="@MonedaHelper.FormatearBs(Model.Total)">✖ Cancelar Pedido</button>
+                }
+            </div>
+        </div>
+
+        @if (cancelado)
+        {
+            <div class="alert alert-danger d-flex align-items-center gap-2 mb-3" style="font-size:14px;">
+                <span>🚫</span>
+                <span>
+                    Este pedido está <strong>CANCELADO</strong>: no suma en el cierre de caja y sus
+                    insumos volvieron al inventario. Su estado es <strong>definitivo</strong>,
+                    no se puede revertir.
+                </span>
+            </div>
+        }
+
+        <!-- ============ DATOS DEL PEDIDO ============ -->
+        <div class="panel-detalle p-3 mb-3">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="rotulo">Factura Nº</div>
+                    <div class="fw-bold">@(Model.NumeroPedido ?? "—")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Fecha</div>
+                    <div class="fw-bold">@Model.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Cliente</div>
+                    <div class="fw-bold">@cliente</div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Cliente?.Nit))
+                    {
+                        <div class="text-muted small">NIT/CI: @Model.Cliente.Nit</div>
+                    }
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Tipo</div>
+                    <div class="fw-bold">@tipo</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Atendió</div>
+                    <div class="fw-bold">@Model.Empleado?.Nombre @Model.Empleado?.Apellido</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Estado</div>
+                    <div><span class="badge-estado @c">@Model.Estado</span></div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Pago</div>
+                    <div class="fw-bold">@Model.EstadoPago</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="rotulo">Pedidos</div>
+                    <div class="fw-bold">@detalles.Count producto(s)</div>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Observaciones))
+            {
+                <div class="mt-3 pt-3 border-top">
+                    <div class="rotulo">Observaciones</div>
+                    <div>@Model.Observaciones</div>
+                </div>
+            }
+        </div>
+
+        <!-- ============ PRODUCTOS ============ -->
+        <div class="table-responsive">
+            <table class="table tabla-items mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th class="text-center">Cantidad</th>
+                        <th class="text-end">P. Unitario</th>
+                        <th class="text-end">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var det in detalles)
+                    {
+                        <tr>
+                            <td>
+                                @(det.Producto?.Nombre ?? "Producto")
+                                @if (!string.IsNullOrWhiteSpace(det.Observacion))
+                                {
+                                    <div class="text-muted small">📝 @det.Observacion</div>
+                                }
+                            </td>
+                            <td class="text-center">@MonedaHelper.FormatearNumero(det.Cantidad)</td>
+                            <td class="text-end">@MonedaHelper.FormatearBs(det.PrecioUnitario)</td>
+                            <td class="text-end">@MonedaHelper.FormatearBs(det.Subtotal)</td>
+                        </tr>
+                    }
+                    @if (detalles.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-3">Este pedido no tiene productos registrados.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ============ TOTALES ============ -->
+        <div class="panel-detalle p-3 mt-3 d-flex justify-content-end">
+            <div style="min-width: 260px;">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="rotulo">Subtotal</span>
+                    <span class="fw-bold">@MonedaHelper.FormatearBs(Model.Subtotal)</span>
+                </div>
+                @if (Model.Descuento > 0)
+                {
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="rotulo">Descuento</span>
+                        <span class="fw-bold">- @MonedaHelper.FormatearBs(Model.Descuento)</span>
+                    </div>
+                }
+                <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-2">
+                    <span class="rotulo">Total</span>
+                    <span class="total-final">@MonedaHelper.FormatearBs(Model.Total)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!cancelado)
+    {
+        @await Html.PartialAsync("~/Views/Administrador/Ventas/_ModalCancelarPedido.cshtml")
+    }
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

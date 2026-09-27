@@ -256,7 +256,6 @@ namespace ELRINCONDORADO.Controllers
                 }
 
                 var tieneRegistros = await _context.Pedidos.AnyAsync(p => p.IdEmpleado == id)
-                    || await _context.Ventas.AnyAsync(v => v.IdEmpleado == id)
                     || await _context.Compras.AnyAsync(c => c.IdEmpleado == id)
                     || await _context.MovimientosInventario.AnyAsync(m => m.IdEmpleado == id);
 

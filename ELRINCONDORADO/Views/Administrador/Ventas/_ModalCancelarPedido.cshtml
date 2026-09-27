@@ -1,0 +1,71 @@
+@{
+    // Rango de fechas que la pantalla quiere conservar al volver de la cancelacion
+    // (opcional: si no se envía, la lista de ventas se muestra completa).
+    var desde = ViewData["RangoDesde"] as string ?? "";
+    var hasta = ViewData["RangoHasta"] as string ?? "";
+}
+
+<!-- ============ MODAL CONFIRMAR CANCELACIÓN (acción irreversible) ============ -->
+<div class="modal fade" id="modalCancelar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="formCancelar" method="post" action="/Ventas/Cancelar" class="modal-content" style="border-radius:14px; border:none;">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" id="cancelarId" />
+            <input type="hidden" name="desde" value="@desde" />
+            <input type="hidden" name="hasta" value="@hasta" />
+            <div class="modal-header" style="background:linear-gradient(135deg,#c92a2a,#a5111b); color:#fff; border-radius:14px 14px 0 0;">
+                <h5 class="modal-title">⚠ Cancelar pedido</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" style="padding:20px 22px;">
+                <div class="alert alert-danger mb-3" style="font-size:14px;">
+                    Esta acción es <strong>definitiva</strong>: un pedido cancelado
+                    <strong>no se puede volver a su estado anterior</strong>.
+                </div>
+                <table class="table table-sm mb-3" style="font-size:14px;">
+                    <tbody>
+                        <tr><th style="width:120px;">Pedido</th><td id="cancelarPedido"></td></tr>
+                        <tr><th>Factura</th><td id="cancelarFactura"></td></tr>
+                        <tr><th>Cliente</th><td id="cancelarCliente"></td></tr>
+                        <tr><th>Total</th><td id="cancelarTotal"></td></tr>
+                    </tbody>
+                </table>
+                <p style="font-size:14px; margin:0; color:#444;">Al cancelar el pedido:</p>
+                <ul style="font-size:14px; color:#444; margin:6px 0 0 20px; padding:0;">
+                    <li>Deja de sumar en el <strong>cierre de caja</strong> y en el reporte de ventas.</li>
+                    <li>Los <strong>ingredientes vuelven al inventario</strong> como movimientos de ingreso.</li>
+                </ul>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #f0ead2; padding:12px 22px;">
+                <button type="button" class="btn btn-cancelar-modal" data-bs-dismiss="modal">No, dejar como está</button>
+                <button type="submit" class="btn btn-confirmar-cancelar">Sí, cancelar el pedido</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .btn-cancelar-modal { background: #f1f3f5; color: #495057; border: 1px solid #ced4da; border-radius: 10px; padding: 8px 16px; font-weight: 600; }
+    .btn-cancelar-modal:hover { background: #e2e6ea; color: #343a40; }
+    .btn-confirmar-cancelar { background: linear-gradient(135deg, #c92a2a, #a5111b); color: #fff; border: none; border-radius: 10px; padding: 8px 18px; font-weight: 600; }
+    .btn-confirmar-cancelar:hover { background: linear-gradient(135deg, #a5111b, #8c0f17); color: #fff; }
+</style>
+
+<script>
+    // Abre el modal con los datos del pedido y espera la confirmacion antes de enviarlo.
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('modalCancelar');
+        if (!el) return;
+        var modal = new bootstrap.Modal(el);
+        document.querySelectorAll('.js-cancelar').forEach(function (boton) {
+            boton.addEventListener('click', function () {
+                document.getElementById('cancelarId').value = boton.dataset.id;
+                document.getElementById('cancelarPedido').textContent = '#' + String(boton.dataset.id).padStart(4, '0');
+                document.getElementById('cancelarFactura').textContent = boton.dataset.factura;
+                document.getElementById('cancelarCliente').textContent = boton.dataset.cliente || 'SIN NOMBRE';
+                document.getElementById('cancelarTotal').textContent = boton.dataset.total;
+                modal.show();
+            });
+        });
+    });
+</script>

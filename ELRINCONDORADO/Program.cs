@@ -23,6 +23,7 @@ builder.Services.AddSession(options =>
 });
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddSignalR();
 
 // Aviso sonoro de "pedido nuevo pendiente" cada 10 s, solo mientras haya una pantalla de cocina
 // abierta (su latido llega a /Cocina/Ping). Suena en el equipo donde corre la app.
@@ -82,5 +83,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+app.MapHub<ELRINCONDORADO.Hubs.PedidosHub>("/pedidosHub");
 
 app.Run();

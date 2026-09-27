@@ -15,6 +15,10 @@ namespace ELRINCONDORADO.Models
     public class FacturaItemViewModel
     {
         public int IdProducto { get; set; }
+
+        /// <summary>Si es mayor a cero, la línea es una promoción y IdProducto se ignora.</summary>
+        public int IdPromocion { get; set; }
+
         public int Cantidad { get; set; }
         public string? Observacion { get; set; }
     }

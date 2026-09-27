@@ -9,6 +9,5 @@ namespace ELRINCONDORADO.Models
 
         // Relaciones
         public ICollection<Pedido>? Pedidos { get; set; }
-        public ICollection<Venta>? Ventas { get; set; }
     }
 }

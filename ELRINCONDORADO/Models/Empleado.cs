@@ -15,7 +15,6 @@ namespace ELRINCONDORADO.Models
         // Relaciones
         public Rol? Rol { get; set; }
         public ICollection<Pedido>? Pedidos { get; set; }
-        public ICollection<Venta>? Ventas { get; set; }
         public ICollection<Compra>? Compras { get; set; }
         public ICollection<MovimientoInventario>? MovimientosInventario { get; set; }
     }

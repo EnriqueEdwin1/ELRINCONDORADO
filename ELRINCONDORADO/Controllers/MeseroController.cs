@@ -2,16 +2,20 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ELRINCONDORADO.Data;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class MeseroController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IHubContext<PedidosHub> _hubContext;
 
-        public MeseroController(AppDbContext context)
+        public MeseroController(AppDbContext context, IHubContext<PedidosHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         // Verifica que haya sesión activa y que el rol sea MESERO
@@ -55,8 +59,19 @@ namespace ELRINCONDORADO.Controllers
             var pedido = await _context.Pedidos.FindAsync(id);
             if (pedido == null) return NotFound();
 
+            // Un pedido cancelado por el administrador es definitivo: el mesero no lo revive.
+            if (pedido.Estado == "CANCELADO")
+            {
+                TempData["Exito"] = $"El pedido #{pedido.IdPedido} está cancelado: no se puede entregar.";
+                return RedirectToAction(nameof(Index));
+            }
+
             pedido.Estado = "ENTREGADO";
             await _context.SaveChangesAsync();
+
+            // Notificar a la cocina en tiempo real mediante SignalR
+            await _hubContext.Clients.Group("Cocina").SendAsync("RecibirCambioEstado", pedido.IdPedido, "ENTREGADO");
+            await _hubContext.Clients.Group("Cajero").SendAsync("RecibirCambioEstado", pedido.IdPedido, "ENTREGADO");
 
             TempData["Exito"] = $"Pedido #{pedido.IdPedido} marcado como ENTREGADO.";
             return RedirectToAction(nameof(Index));

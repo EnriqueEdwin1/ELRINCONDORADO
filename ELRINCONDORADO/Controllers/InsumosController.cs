@@ -140,8 +140,19 @@ namespace ELRINCONDORADO.Controllers
 
                 try
                 {
+                    // La modificación de un insumo sí queda registrada en Movimientos (las compras
+                    // no: esas se ven en su propia pantalla). Se compara el stock y el costo
+                    // antes de guardar para poder dejar el detalle del ajuste.
+                    var anterior = await _context.Insumos.AsNoTracking()
+                        .FirstOrDefaultAsync(i => i.IdInsumo == insumo.IdInsumo);
+
                     _context.Update(insumo);
                     await _context.SaveChangesAsync();
+
+                    if (anterior != null)
+                    {
+                        await RegistrarAjuste(anterior, insumo);
+                    }
                 }
                 catch (DbUpdateConcurrencyException)
                 {
@@ -200,6 +211,52 @@ namespace ELRINCONDORADO.Controllers
         private bool InsumoExists(int id)
         {
             return _context.Insumos.Any(e => e.IdInsumo == id);
+        }
+
+        /// <summary>
+        /// Deja rastro en Movimientos cuando se edita un insumo. Solo se genera un registro si
+        /// cambian el stock o el costo; la cantidad es la diferencia de stock con signo
+        /// (+ suma, - resta) y el motivo detalla qué se modificó.
+        /// Las compras NO pasan por aquí: se registran en su propia pantalla.
+        /// </summary>
+        private async Task RegistrarAjuste(Insumo anterior, Insumo nuevo)
+        {
+            var diferencia = nuevo.StockActual - anterior.StockActual;
+            var cambioCosto = nuevo.CostoUnitario != anterior.CostoUnitario;
+
+            if (diferencia == 0 && !cambioCosto) return;
+
+            // El movimiento necesita un empleado válido (llave foránea); si la sesión no lo trae,
+            // se omite el registro antes que romper la edición del insumo.
+            var idSesion = HttpContext.Session.GetString("UsuarioId");
+            if (!int.TryParse(idSesion, out var idEmpleado) ||
+                !await _context.Empleados.AnyAsync(e => e.IdEmpleado == idEmpleado))
+            {
+                return;
+            }
+
+            var partes = new List<string>();
+
+            if (diferencia != 0)
+            {
+                partes.Add($"stock {anterior.StockActual:0.###} → {nuevo.StockActual:0.###}"
+                    + $" ({(diferencia > 0 ? "+" : "")}{diferencia:0.###} {nuevo.UnidadMedida})");
+            }
+            if (cambioCosto)
+            {
+                partes.Add($"costo {anterior.CostoUnitario:0.##} → {nuevo.CostoUnitario:0.##}");
+            }
+
+            _context.MovimientosInventario.Add(new MovimientoInventario
+            {
+                IdInsumo = nuevo.IdInsumo,
+                IdEmpleado = idEmpleado,
+                TipoMovimiento = "AJUSTE",
+                Cantidad = diferencia,
+                Fecha = DateTime.Now,
+                Motivo = "Modificación de insumo: " + string.Join(" · ", partes)
+            });
+            await _context.SaveChangesAsync();
         }
 
         // Carga en ViewBag los destinos disponibles para el select de los formularios

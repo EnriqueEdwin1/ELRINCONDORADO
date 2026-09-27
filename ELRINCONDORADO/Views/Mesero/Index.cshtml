@@ -78,11 +78,12 @@
         .btn-mesero:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 6px 14px rgba(0,0,0,.15); }
         .pie-tiempo { font-size: 13px; color: #9c8b73; padding: 10px 18px; border-top: 1px solid #f0ead9; background: #fdfbf5; }
     </style>
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Mesero">🛎️ El Rincón Dorado · <span>Mesero</span></a>
+            <a class="navbar-brand" href="/Mesero"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span><span class="marca-modulo">Mesero</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white-50 me-2">👤 @(nombre ?? "Mesero")</span>
                 <form method="post" action="/Auth/Logout">
@@ -200,8 +201,41 @@
     </div>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script>
-        // Refresco automático cada 20s para ver los nuevos pedidos listos de cocina
+        // ================= SignalR: Conexión en tiempo real =================
+        var connection = null;
+        async function iniciarSignalR() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('/pedidosHub')
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on('RecibirCambioEstado', function (idPedido, estado) {
+                    console.log('Cambio de estado:', idPedido, estado);
+                    if (estado === 'LISTO') {
+                        // Cuando cocina marca un pedido como LISTO, recargar la página
+                        window.location.href = '/Mesero/Index';
+                    }
+                });
+
+                connection.onreconnected(function () {
+                    console.log('SignalR reconectado');
+                });
+
+                await connection.start();
+                console.log('SignalR conectado (Mesero)');
+            } catch (err) {
+                console.error('Error al conectar SignalR:', err);
+                setTimeout(iniciarSignalR, 5000);
+            }
+        }
+
+        // Iniciar SignalR
+        iniciarSignalR();
+
+        // Refresco automático cada 20s como respaldo
         setTimeout(() => window.location.href = '/Mesero/Index', 20000);
     </script>
 </body>

@@ -1,9 +1,14 @@
 @model IEnumerable<ELRINCONDORADO.Models.Producto>
 @using ELRINCONDORADO.Helpers
+@using ELRINCONDORADO.Models
 @{
     ViewData["Title"] = "Productos";
     Layout = null;
     var nombre = Context.Session.GetString("Nombre");
+    var pestana = (ViewBag.PestanaActiva as string) ?? "productos";
+    var totalProductos = ViewBag.TotalProductos as int? ?? 0;
+    var totalPromociones = ViewBag.TotalPromociones as int? ?? 0;
+    var promociones = ViewBag.Promociones as List<PromocionListadoViewModel> ?? new List<PromocionListadoViewModel>();
 }
 
 <!DOCTYPE html>
@@ -15,11 +20,12 @@
     <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/administrador.css" rel="stylesheet" />
     <link href="~/css/crud.css" rel="stylesheet" />
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white">@nombre</span>
                 <form method="post" action="/Auth/Logout" style="display: inline;">
@@ -37,7 +43,14 @@
             </h2>
             <div class="d-flex gap-2">
                 <a href="/Categorias" class="btn btn-outline-secondary">Categorías</a>
-                <a href="/Productos/Create" class="btn btn-modulo">Agregar producto</a>
+                @if (pestana == "promociones")
+                {
+                    <a href="/Productos/PromocionCreate" class="btn btn-modulo">Agregar promoción</a>
+                }
+                else
+                {
+                    <a href="/Productos/Create" class="btn btn-modulo">Agregar producto</a>
+                }
             </div>
         </div>
 
@@ -57,76 +70,187 @@
             </div>
         }
 
-        <input type="text" id="buscarProducto" class="form-control mb-3"
-               placeholder="Buscar producto por nombre..." />
+        <ul class="nav nav-pills mb-3">
+            <li class="nav-item">
+                <a class="nav-link @(pestana == "productos" ? "active" : "")"
+                   href="/Productos">Productos <span class="badge bg-light text-dark">@totalProductos</span></a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(pestana == "promociones" ? "active" : "")"
+                   href="/Productos?pestana=promociones">Promociones <span class="badge bg-light text-dark">@totalPromociones</span></a>
+            </li>
+        </ul>
 
-        <table class="table table-crud" id="tablaProductos">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Imagen</th>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Categoría</th>
-                    <th>Precio</th>
-                    <th>Receta</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in Model)
-                {
-                    <tr class="fila-clic" data-nombre="@item.Nombre"
-                        onclick="window.location.href='@Url.Action("Details", new { id = item.IdProducto })';">
-                        <td>@item.IdProducto</td>
-                        <td>
-                            @if (!string.IsNullOrEmpty(item.ImagenUrl))
-                            {
-                                <img src="@item.ImagenUrl" alt="@item.Nombre" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
-                            }
-                            else
-                            {
-                                <span class="text-muted">—</span>
-                            }
-                        </td>
-                        <td>@(string.IsNullOrEmpty(item.Codigo) ? "—" : item.Codigo)</td>
-                        <td>@item.Nombre</td>
-                        <td>@item.Categoria?.Nombre</td>
-                        <td>@MonedaHelper.FormatearBs(item.Precio)</td>
-                        <td>
-                            @if (item.Receta != null)
-                            {
-                                <span class="badge-estado activo">Con receta</span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">—</span>
-                            }
-                        </td>
-                        <td>
-                            @if (item.Activo)
-                            {
-                                <span class="badge-estado activo">Activo</span>
-                            }
-                            else
-                            {
-                                <span class="badge-estado inactivo">Inactivo</span>
-                            }
-                        </td>
+        @if (pestana == "promociones")
+        {
+            <p class="text-muted">
+                Las promociones se guardan en su propia tabla y no tienen categoría: agrupan productos del menú
+                con un precio propio. Toda promoción activa aparece en el cajero, en la pantalla de promociones,
+                y se agrega al carrito como un producto más.
+            </p>
+
+            <input type="text" id="buscarPromocion" class="form-control mb-3"
+                   placeholder="Buscar promoción por nombre..." />
+
+            <table class="table table-crud" id="tablaPromociones">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Imagen</th>
+                        <th>Promoción</th>
+                        <th>Productos</th>
+                        <th>Precio normal</th>
+                        <th>Precio promo</th>
+                        <th>Ahorro</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var item in promociones)
+                    {
+                        var promo = item.Promocion;
+                        <tr class="fila-clic" data-nombre="@promo.Nombre"
+                            onclick="window.location.href='@Url.Action("PromocionDetails", new { id = promo.IdPromocion })';">
+                            <td>@promo.IdPromocion</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(promo.ImagenUrl))
+                                {
+                                    <img src="@promo.ImagenUrl" alt="@promo.Nombre" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                <strong>@promo.Nombre</strong>
+                                @if (!string.IsNullOrWhiteSpace(promo.Descripcion))
+                                {
+                                    <div class="text-muted small">@promo.Descripcion</div>
+                                }
+                            </td>
+                            <td>
+                                @item.CantidadProductos producto(s)
+                                <div class="text-muted small">
+                                    @(item.ResumenProductos.Length > 60
+                                        ? item.ResumenProductos.Substring(0, 60) + "…"
+                                        : item.ResumenProductos)
+                                </div>
+                            </td>
+                            <td>@MonedaHelper.FormatearBs(item.SumaProductos)</td>
+                            <td><strong>@MonedaHelper.FormatearBs(item.Precio)</strong></td>
+                            <td>
+                                @if (item.PorcentajeAhorro > 0)
+                                {
+                                    <span class="badge-estado activo">Ahorro del @item.PorcentajeAhorro.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%</span>
+                                    <div class="text-muted small">ahorra @MonedaHelper.FormatearBs(item.Ahorro)</div>
+                                }
+                                else
+                                {
+                                    <span class="badge-estado inactivo">Sin ahorro</span>
+                                }
+                            </td>
+                            <td>
+                                @if (promo.Estado == "ACTIVA")
+                                {
+                                    <span class="badge-estado activo">Activa</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-estado inactivo">Inactiva</span>
+                                }
+                            </td>
+                            <td class="text-end" onclick="event.stopPropagation();">
+                                <a href="/Productos/PromocionEdit/@promo.IdPromocion" class="btn btn-sm btn-outline-secondary">Editar</a>
+                                <a href="/Productos/PromocionDelete/@promo.IdPromocion" class="btn btn-sm btn-outline-danger">Eliminar</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (!promociones.Any())
+            {
+                <div class="alert alert-info">
+                    Todavía no hay promociones registradas.
+                    <a href="/Productos/PromocionCreate" class="alert-link">Crear la primera</a>.
+                </div>
+            }
+        }
+        else
+        {
+            <input type="text" id="buscarProducto" class="form-control mb-3"
+                   placeholder="Buscar producto por nombre..." />
+
+            <table class="table table-crud" id="tablaProductos">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Imagen</th>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Precio</th>
+                        <th>Receta</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model)
+                    {
+                        <tr class="fila-clic" data-nombre="@item.Nombre"
+                            onclick="window.location.href='@Url.Action("Details", new { id = item.IdProducto })';">
+                            <td>@item.IdProducto</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(item.ImagenUrl))
+                                {
+                                    <img src="@item.ImagenUrl" alt="@item.Nombre" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>@(string.IsNullOrEmpty(item.Codigo) ? "—" : item.Codigo)</td>
+                            <td>@item.Nombre</td>
+                            <td>@item.Categoria?.Nombre</td>
+                            <td>@MonedaHelper.FormatearBs(item.Precio)</td>
+                            <td>
+                                @if (item.Receta != null)
+                                {
+                                    <span class="badge-estado activo">Con receta</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                @if (item.Activo)
+                                {
+                                    <span class="badge-estado activo">Activo</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-estado inactivo">Inactivo</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            var buscar = document.getElementById('buscarProducto');
+            var buscar = document.getElementById('buscarProducto') || document.getElementById('buscarPromocion');
             if (!buscar) return;
             buscar.addEventListener('input', function () {
                 var filtro = buscar.value.toLowerCase();
-                document.querySelectorAll('#tablaProductos tbody tr').forEach(function (tr) {
+                document.querySelectorAll('table tbody tr').forEach(function (tr) {
                     var nombre = tr.getAttribute('data-nombre') || '';
                     tr.style.display = (nombre.toLowerCase().indexOf(filtro) !== -1) ? '' : 'none';
                 });

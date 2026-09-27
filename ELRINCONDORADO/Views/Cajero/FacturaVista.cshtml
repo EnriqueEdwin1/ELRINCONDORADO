@@ -7,6 +7,15 @@
     Layout = null;
     var detalles = (Model.DetallesPedidos ?? new List<DetallePedido>()).OrderBy(d => d.IdDetalle).ToList();
     var atendido = $"{Model.Empleado?.Nombre} {Model.Empleado?.Apellido}".Trim();
+    // El cajero y el administrador reutilizan esta vista; cada uno define a dónde vuelve
+    // el botón y de dónde se descarga el PDF.
+    // Algunos pedidos antiguos se facturaron sin número asignado: se muestra el id del pedido.
+    var numeroFactura = string.IsNullOrWhiteSpace(Model.NumeroPedido)
+        ? Model.IdPedido.ToString("D4")
+        : Model.NumeroPedido;
+    var volverUrl = (ViewData["VolverUrl"] as string) ?? "/Cajero";
+    var volverTexto = (ViewData["VolverTexto"] as string) ?? "← POS";
+    var pdfUrl = (ViewData["PdfUrl"] as string) ?? $"/Cajero/Factura/{Model.IdPedido}";
 }
 <!DOCTYPE html>
 <html lang="es">
@@ -79,8 +88,8 @@
 <body>
     <div class="acciones">
         <h2>Factura #@Model.IdPedido</h2>
-        <a class="btn-volver" href="/Cajero">← POS</a>
-        <button class="btn-pdf" type="button" onclick="window.open('/Cajero/Factura/@Model.IdPedido', '_blank')">📄 PDF</button>
+        <a class="btn-volver" href="@volverUrl">@volverTexto</a>
+        <button class="btn-pdf" type="button" onclick="window.open('@pdfUrl', '_blank')">📄 PDF</button>
         <button class="btn-imprimir" type="button" onclick="window.print()">🖨️ Imprimir</button>
     </div>
 
@@ -92,7 +101,7 @@
         <div class="sep">- - - - - - - - - - - - - - - - - - - - - -</div>
 
         <!-- Datos de la factura y del cliente -->
-        <div class="fila"><span class="e">Nº Factura:</span><span class="v">@(Model.NumeroPedido ?? Model.IdPedido.ToString("D4"))</span></div>
+        <div class="fila"><span class="e">Nº Factura:</span><span class="v">@numeroFactura</span></div>
         <div class="fila"><span class="e">Fecha:</span><span class="v">@Model.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)</span></div>
         <div class="fila"><span class="e">Tipo:</span><span class="v">@(Model.TipoPedido == "MESA" ? (Model.Mesa != null ? "Mesa " + Model.Mesa.Numero : "Servido en mesa") : "Para llevar")</span></div>
         <div class="fila"><span class="e">Estado:</span><span class="v">@Model.Estado</span></div>
@@ -141,7 +150,10 @@
             <div class="fila"><span class="e">Subtotal:</span><span class="v">@MonedaHelper.FormatearBs(Model.Subtotal)</span></div>
             @if (Model.Descuento > 0)
             {
-                <div class="fila"><span class="e">Descuento:</span><span class="v">@MonedaHelper.FormatearBs(Model.Descuento)</span></div>
+                <div class="fila">
+                    <span class="e">Descuento@(Model.Promocion != null ? " (" + Model.Promocion.Nombre + ")" : ""):</span>
+                    <span class="v">-@MonedaHelper.FormatearBs(Model.Descuento)</span>
+                </div>
             }
             <div class="fila gran-total"><span class="e">TOTAL:</span><span class="v">@MonedaHelper.FormatearBs(Model.Total)</span></div>
         </div>

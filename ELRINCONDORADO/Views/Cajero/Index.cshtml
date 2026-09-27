@@ -2,6 +2,7 @@
 @using ELRINCONDORADO.Models
 @using ELRINCONDORADO.Helpers
 @using System.Globalization
+@using System.Text.Json
 @using Microsoft.AspNetCore.Http
 @functions {
     string NombreBonito(string nombre) => string.Join(" ", nombre.Split('_').Select(p => p.Length == 0 ? "" : char.ToUpper(p[0]) + p.Substring(1).ToLowerInvariant()));
@@ -215,12 +216,13 @@
         }
         .btn-cancelar:hover { background: #f0f0f0; color: #333; }
     </style>
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
 
     <nav class="navbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Cajero">🍗 El Rincón Dorado · Cajero</a>
+            <a class="navbar-brand" href="/Cajero"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span><span class="marca-modulo">Cajero</span></a>
             <div class="ms-auto d-flex align-items-center gap-3">
                 <span class="nombre-user">👤 @(nombre ?? "Cajero")</span>
                 <button type="button" class="btn btn-logout btn-sm" data-bs-toggle="modal" data-bs-target="#modalCierreCaja">🧾 Cierre de caja</button>
@@ -349,6 +351,10 @@
                             </div>
                             <div class="promo-body">
                                 <span class="badge-promo align-self-start">PROMOCIÓN</span>
+                                @if (!string.IsNullOrEmpty(promo.ImagenUrl))
+                                {
+                                    <img src="@promo.ImagenUrl" class="producto-img mt-2" alt="@promo.Nombre" />
+                                }
                                 <div class="promo-desc mt-2">
                                     @(string.IsNullOrEmpty(promo.Descripcion) ? "Promoción especial del día." : promo.Descripcion)
                                 </div>
@@ -360,10 +366,19 @@
                                     </div>
                                 }
                                 <div class="promo-precio">@MonedaHelper.FormatearBs(promo.Valor)</div>
-                                <button type="button" class="btn btn-agregar"
-                                        onclick="mostrarToast('La selección de promociones se habilitará en el siguiente paso.', 'info')">
-                                    Agregar promoción
-                                </button>
+                                @if (promo.DetallePromociones != null && promo.DetallePromociones.Any(d => d.Producto != null))
+                                {
+                                    <button type="button" class="btn btn-agregar"
+                                            onclick="agregarPromocion(@promo.IdPromocion, @JsonSerializer.Serialize(promo.Nombre), @promo.Valor.ToString(CultureInfo.InvariantCulture), @JsonSerializer.Serialize(string.Join(" · ", promo.DetallePromociones.Where(d => d.Producto != null).Select(d => d.Producto!.Nombre + " x" + d.Cantidad))))">
+                                        Agregar promoción
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-agregar" disabled>
+                                        Sin productos cargados
+                                    </button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -497,24 +512,37 @@
             }
         }
 
+        function clave(item) { return item.tipo + ':' + item.id; }
+
         function agregar(id, nombre, precio) {
-            const item = carrito.find(p => p.id === id);
+            const tipo = 'p';
+            const item = carrito.find(p => clave(p) === tipo + ':' + id);
             if (item) item.cantidad++;
-            else carrito.push({ id, nombre, precio: Number(precio), cantidad: 1 });
+            else carrito.push({ tipo, id, nombre, precio: Number(precio), cantidad: 1, incluye: null });
             render();
             mostrarToast('Producto agregado al carrito correctamente.', 'ok');
         }
 
-        function cambiarCantidad(id, delta) {
-            const item = carrito.find(p => p.id === id);
+        // Las promociones no son productos: se venden como una línea del carrito con su
+        // propio precio y el servidor guarda los productos que incluye como detalles del pedido.
+        function agregarPromocion(id, nombre, precio, incluye) {
+            const item = carrito.find(p => clave(p) === 'promo:' + id);
+            if (item) item.cantidad++;
+            else carrito.push({ tipo: 'promo', id, nombre, precio: Number(precio), cantidad: 1, incluye: incluye || '' });
+            render();
+            mostrarToast('Promoción agregada al carrito correctamente.', 'ok');
+        }
+
+        function cambiarCantidad(claveItem, delta) {
+            const item = carrito.find(p => clave(p) === claveItem);
             if (!item) return;
             item.cantidad += delta;
-            if (item.cantidad <= 0) carrito = carrito.filter(p => p.id !== id);
+            if (item.cantidad <= 0) carrito = carrito.filter(p => clave(p) !== claveItem);
             render();
         }
 
-        function eliminarItem(id) {
-            carrito = carrito.filter(p => p.id !== id);
+        function eliminarItem(claveItem) {
+            carrito = carrito.filter(p => clave(p) !== claveItem);
             render();
         }
 
@@ -533,20 +561,27 @@
                 return;
             }
 
-            body.innerHTML = carrito.map(p => `
+            body.innerHTML = carrito.map(p => {
+                const k = clave(p);
+                const extra = p.tipo === 'promo'
+                    ? `<div class="small text-warning-emphasis"><strong>PROMOCIÓN</strong> · ${p.incluye || ''}</div>`
+                    : '';
+                return `
                 <div class="carrito-item">
                     <div>
                         <div class="c-nombre">${p.nombre}</div>
+                        ${extra}
                         <div class="small text-muted">${fmtBs(p.precio)} c/u</div>
                     </div>
                     <div class="c-controles">
-                        <button class="btn-cant" onclick="cambiarCantidad(${p.id}, -1)">−</button>
+                        <button class="btn-cant" onclick="cambiarCantidad('${k}', -1)">−</button>
                         <span>${p.cantidad}</span>
-                        <button class="btn-cant" onclick="cambiarCantidad(${p.id}, 1)">+</button>
+                        <button class="btn-cant" onclick="cambiarCantidad('${k}', 1)">+</button>
                         <span class="c-subtotal">${fmtBs(p.precio * p.cantidad)}</span>
-                        <button class="btn-eliminar" onclick="eliminarItem(${p.id})">🗑</button>
+                        <button class="btn-eliminar" onclick="eliminarItem('${k}')">🗑</button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
         }
 
         function seleccionarGrupo(idGrupo, el) {
@@ -567,7 +602,12 @@
             const nombrePedido = document.getElementById('nombrePedido').value.trim();
             if (!nombrePedido) { mostrarToast('Indique el nombre del pedido/cliente.', 'error'); document.getElementById('nombrePedido').focus(); return; }
 
-            const items = carrito.map(p => ({ idProducto: p.id, cantidad: p.cantidad, observacion: null }));
+            const items = carrito.map(p => ({
+                idProducto: p.tipo === 'p' ? p.id : 0,
+                idPromocion: p.tipo === 'promo' ? p.id : 0,
+                cantidad: p.cantidad,
+                observacion: null
+            }));
             const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
             fetch('/Cajero/Facturar', {
@@ -623,5 +663,42 @@
     </script>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        // ================= SignalR: Conexión en tiempo real =================
+        var connection = null;
+        async function iniciarSignalR() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('/pedidosHub')
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on('RecibirCambioEstado', function (idPedido, estado) {
+                    console.log('Cambio de estado de pedido:', idPedido, estado);
+                    // Aquí puedes agregar lógica para mostrar notificaciones al cajero
+                    // Por ejemplo, cuando la cocina marca un pedido como LISTO
+                    if (estado === 'LISTO') {
+                        mostrarToast('Pedido #' + idPedido + ' está listo para entregar', 'success');
+                    }
+                });
+
+                connection.onreconnected(function () {
+                    console.log('SignalR reconectado');
+                    connection.invoke('UnirseACajero');
+                });
+
+                await connection.start();
+                console.log('SignalR conectado (Cajero)');
+                await connection.invoke('UnirseACajero');
+            } catch (err) {
+                console.error('Error al conectar SignalR:', err);
+                setTimeout(iniciarSignalR, 5000);
+            }
+        }
+
+        // Iniciar SignalR
+        iniciarSignalR();
+    </script>
 </body>
 </html>

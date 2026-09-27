@@ -53,12 +53,17 @@
         .card-cierre .cierre-total { color: #6c757d; font-size: 0.9rem; }
         .tabla-simple th { font-size: 0.8rem; text-transform: uppercase; }
         .badge-estado.salida { background: #fdeaea; color: #c0392b; border: 1px solid #e8b4b4; }
+    .badge-estado.ajuste { background: #fff4e0; color: #a15c07; border: 1px solid #f0c98a; }
+    .badge-estado.ingreso { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .cantidad-ajuste { font-weight: 600; color: #a15c07; }
+    .cantidad-ingreso { font-weight: 600; color: #1b5e20; }
     </style>
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="/Administrador">🏪 El Rincón Dorado</a>
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white">@nombre</span>
                 <form method="post" action="/Auth/Logout" style="display: inline;">
@@ -69,6 +74,23 @@
     </nav>
 
     <div class="container-custom">
+        @{
+            // Las compras no pasan por aquí: se ven en la pantalla de Compras.
+            string EtiquetaTipo(MovimientoInventario m) => m.TipoMovimiento switch
+            {
+                "AJUSTE" => "Ajuste",
+                "INGRESO" => "Ingreso",
+                _ => "Salida"
+            };
+            string ClaseTipo(MovimientoInventario m) => m.TipoMovimiento switch
+            {
+                "AJUSTE" => "ajuste",
+                "INGRESO" => "ingreso",
+                _ => "salida"
+            };
+            // Un ajuste puede ser de más o de menos; un ingreso por cancelación siempre suma.
+            bool MuestraSigno(MovimientoInventario m) => m.TipoMovimiento == "AJUSTE" || m.TipoMovimiento == "INGRESO";
+        }
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2 class="mb-0">
                 <a href="/Administrador" class="btn btn-sm btn-outline-secondary me-2">← Volver a administración</a>
@@ -90,14 +112,18 @@
             <div class="d-flex justify-content-between align-items-start mb-1">
                 <div>
                     <h3>🟢 Turno actual (en curso)</h3>
-                    <div class="subtitulo">Salidas de inventario desde el último cierre de caja.</div>
+                    <div class="subtitulo">
+                        Insumos que salieron con los pedidos, ajustes hechos al modificar un insumo
+                        e insumos que volvieron al inventario al cancelar un pedido.
+                        Las compras no aparecen aquí: se ven en <a href="/Compras">Compras</a>.
+                    </div>
                 </div>
-                <span class="badge text-bg-success">@Model.CantidadTurnoActual salida(s)</span>
+                <span class="badge text-bg-success">@Model.CantidadTurnoActual movimiento(s)</span>
             </div>
 
             @if (Model.TurnoActual.Count == 0)
             {
-                <div class="alert alert-light border mt-2 mb-0 text-center text-muted">No hay salidas en el turno actual.</div>
+                <div class="alert alert-light border mt-2 mb-0 text-center text-muted">No hay movimientos en el turno actual.</div>
             }
             else
             {
@@ -119,8 +145,19 @@
                             <tr>
                                 <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td>@(item.Insumo?.Nombre ?? "—")</td>
-                                <td><span class="badge-estado salida">Salida</span></td>
-                                <td>@MonedaHelper.FormatearNumero(item.Cantidad)</td>
+                                <td>
+                                    <span class="badge-estado @ClaseTipo(item)">@EtiquetaTipo(item)</span>
+                                </td>
+                                <td>
+                                    @if (MuestraSigno(item))
+                                    {
+                                        <span class="cantidad-@ClaseTipo(item)">@(item.Cantidad > 0 ? "+" : "")@MonedaHelper.FormatearNumero(item.Cantidad)</span>
+                                    }
+                                    else
+                                    {
+                                        @MonedaHelper.FormatearNumero(item.Cantidad)
+                                    }
+                                </td>
                                 <td>@(item.Empleado?.Usuario ?? "—")</td>
                                 <td>@(item.Motivo ?? "—")</td>
                                 <td class="text-end">
@@ -158,7 +195,7 @@
                         </div>
                         <span class="cierre-total">
                             Total ventas: <strong>@MonedaHelper.FormatearBs(cierre.TotalVentas)</strong>
-                            · @movimientosCierre.Count salida(s)
+                            · @movimientosCierre.Count movimiento(s)
                             <i class="bi bi-chevron-down ms-1" style="font-size:0.7rem;"></i>
                         </span>
                     </div>
@@ -166,7 +203,7 @@
                         <div class="p-3" style="background:#fff;">
                             @if (movimientosCierre.Count == 0)
                             {
-                                <div class="text-center text-muted py-2">Sin salidas en este cierre.</div>
+                                <div class="text-center text-muted py-2">Sin movimientos en este cierre.</div>
                             }
                             else
                             {
@@ -187,8 +224,19 @@
                                             <tr>
                                                 <td>@item.Fecha.ToString("dd/MM/yyyy HH:mm")</td>
                                                 <td>@(item.Insumo?.Nombre ?? "—")</td>
-                                                <td><span class="badge-estado salida">Salida</span></td>
-                                                <td>@MonedaHelper.FormatearNumero(item.Cantidad)</td>
+                                                <td>
+                                                    <span class="badge-estado @ClaseTipo(item)">@EtiquetaTipo(item)</span>
+                                                </td>
+                                                <td>
+                                                    @if (MuestraSigno(item))
+                                                    {
+                                                        <span class="cantidad-@ClaseTipo(item)">@(item.Cantidad > 0 ? "+" : "")@MonedaHelper.FormatearNumero(item.Cantidad)</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @MonedaHelper.FormatearNumero(item.Cantidad)
+                                                    }
+                                                </td>
                                                 <td>@(item.Empleado?.Usuario ?? "—")</td>
                                                 <td>@(item.Motivo ?? "—")</td>
                                             </tr>

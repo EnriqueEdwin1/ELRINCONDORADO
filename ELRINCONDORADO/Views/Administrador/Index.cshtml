@@ -1,8 +1,13 @@
+@model ELRINCONDORADO.Models.AdminResumenViewModel
+@using ELRINCONDORADO.Helpers
 @{
     ViewData["Title"] = "Panel de Administración";
     Layout = null;
     var nombre = Context.Session.GetString("Nombre");
     var rol = Context.Session.GetString("Rol");
+    var maximo = 8;
+    var mostrados = Model.InsumosBajoMinimo.Take(maximo).ToList();
+    var restantes = Model.InsumosBajoMinimo.Count - mostrados.Count;
 }
 
 <!DOCTYPE html>
@@ -13,11 +18,12 @@
     <title>@ViewData["Title"]</title>
     <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/marca.css" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">🏪 El Rincón Dorado</a>
+            <a class="navbar-brand" href="#"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white">@nombre</span>
                 <form method="post" action="/Auth/Logout" style="display: inline;">
@@ -34,17 +40,85 @@
             <p>Hora de acceso: <strong>@DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss")</strong></p>
         </div>
 
-        <div class="row">
-            <div class="col-md-3 mb-4">
-                <div class="card">
-                    <div class="card-header">📊 Reportes</div>
-                    <div class="card-body">
-                        <p>Ventas, ingresos y métricas generales.</p>
-                        <a href="/Ventas" class="btn btn-sm btn-modulo">Ver reportes</a>
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5 mb-3">
+                <div class="resumen-card">
+                    <div class="resumen-cabecera">
+                        <span class="resumen-icono">💰</span>
+                        <div>
+                            <h5>Vendido en el turno</h5>
+                            <small>Lo que va facturando el cajero. Se reinicia al cerrar caja.</small>
+                        </div>
+                    </div>
+                    <div class="resumen-monto">@MonedaHelper.FormatearBs(Model.VendidoTurno)</div>
+                    <div class="resumen-pie">
+                        <div>
+                            @Model.VentasTurno venta@(Model.VentasTurno == 1 ? "" : "s")
+                            @if (Model.UltimoCierreLocal.HasValue)
+                            {
+                                <span>facturadas desde el cierre del @Model.UltimoCierreLocal.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                            }
+                            else
+                            {
+                                <span>facturadas (todavía no hay cierres de caja)</span>
+                            }
+                        </div>
+                        <div class="mt-1">
+                            Hoy: <strong>@MonedaHelper.FormatearBs(Model.VendidoHoy)</strong>
+                            <span class="text-muted">(@Model.VentasHoy venta@(Model.VentasHoy == 1 ? "" : "s"))</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <div class="col-lg-7 mb-3">
+                <div class="resumen-card @(Model.InsumosBajoMinimo.Any() ? "resumen-alerta" : "")">
+                    <div class="resumen-cabecera">
+                        <span class="resumen-icono">⚠️</span>
+                        <div>
+                            <h5>Insumos bajo el stock mínimo</h5>
+                            <small>Hay que comprarlos antes de que falten.</small>
+                        </div>
+                        <a href="/Insumos" class="btn btn-sm btn-outline-secondary ms-auto">Ver inventario</a>
+                    </div>
+
+                    @if (Model.InsumosBajoMinimo.Any())
+                    {
+                        <ul class="resumen-lista">
+                            @foreach (var insumo in mostrados)
+                            {
+                                <li>
+                                    <span>
+                                        <strong>@insumo.Nombre</strong>
+                                        <span class="text-muted">
+                                            — hay @MonedaHelper.FormatearNumero(insumo.StockActual) @insumo.UnidadMedida.ToLowerInvariant(),
+                                            mínimo @MonedaHelper.FormatearNumero(insumo.StockMinimo)
+                                        </span>
+                                    </span>
+                                    <span class="resumen-faltante">faltan @MonedaHelper.FormatearNumero(insumo.Faltante)</span>
+                                </li>
+                            }
+                        </ul>
+                        <div class="resumen-pie d-flex justify-content-between align-items-center">
+                            <span>
+                                @(Model.InsumosBajoMinimo.Count == 1 ? "1 insumo" : Model.InsumosBajoMinimo.Count + " insumos")
+                                @(restantes > 0 ? $"(+{restantes} más)" : "")
+                            </span>
+                            <a href="/Compras" class="btn btn-sm btn-modulo">Registrar compra</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="resumen-ok">✔ Todos los insumos están sobre su stock mínimo.</div>
+                        <div class="resumen-pie">
+                            <a href="/Insumos" class="btn btn-sm btn-outline-secondary">Ver inventario</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
             <div class="col-md-3 mb-4">
                 <div class="card">
                     <div class="card-header">👥 Empleados</div>
@@ -67,13 +141,10 @@
 
             <div class="col-md-3 mb-4">
                 <div class="card">
-                    <div class="card-header">💳 Pedidos y Ventas</div>
+                    <div class="card-header">🧾 Ventas</div>
                     <div class="card-body">
-                        <p>Mesas, pedidos y ventas del día.</p>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <a href="/Pedidos" class="btn btn-sm btn-modulo">Ver pedidos</a>
-                            <a href="/Ventas" class="btn btn-sm btn-modulo">Ver ventas</a>
-                        </div>
+                        <p>Historial de pedidos, detalle y reimpresión de facturas.</p>
+                        <a href="/Ventas" class="btn btn-sm btn-modulo">Ver ventas</a>
                     </div>
                 </div>
             </div>

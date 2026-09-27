@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using ELRINCONDORADO.Data;
 using ELRINCONDORADO.Models;
 using ELRINCONDORADO.Helpers;
+using ELRINCONDORADO.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -11,10 +13,12 @@ namespace ELRINCONDORADO.Controllers
     public class CajeroController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IHubContext<PedidosHub> _hubContext;
 
-        public CajeroController(AppDbContext context)
+        public CajeroController(AppDbContext context, IHubContext<PedidosHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         // Verifica que haya sesión y que el rol sea CAJERO
@@ -106,46 +110,122 @@ namespace ELRINCONDORADO.Controllers
 
             // Quitar líneas sin cantidad o sin producto
             var items = modelo.Items
-                .Where(i => i.IdProducto > 0 && i.Cantidad > 0)
+                .Where(i => (i.IdProducto > 0 || i.IdPromocion > 0) && i.Cantidad > 0)
                 .ToList();
             if (items.Count == 0)
             {
-                return Json(new { ok = false, mensaje = "Debe seleccionar al menos un producto con cantidad mayor a 0." });
+                return Json(new { ok = false, mensaje = "Debe seleccionar al menos un producto o promoción con cantidad mayor a 0." });
             }
 
-            var idsProductos = items.Select(i => i.IdProducto).ToList();
+            var idsProductos = items.Where(i => i.IdProducto > 0).Select(i => i.IdProducto).ToList();
+            var idsPromociones = items.Where(i => i.IdPromocion > 0).Select(i => i.IdPromocion).Distinct().ToList();
+
+            // Las promociones se venden como una línea del carrito con su propio precio, pero el
+            // pedido guarda los productos que las componen para descontar stock y que la cocina los vea.
+            var promociones = await _context.Promociones
+                .Include(p => p.DetallePromociones!)
+                    .ThenInclude(dp => dp.Producto)
+                .Where(p => idsPromociones.Contains(p.IdPromocion) && p.Estado == "ACTIVA")
+                .ToListAsync();
+
+            // Se cargan también los productos que componen las promociones para poder descontar su stock.
+            var idsProductosACargar = idsProductos
+                .Concat(promociones.SelectMany(p => p.DetallePromociones ?? new List<DetallePromocion>())
+                    .Where(dp => dp.Producto != null)
+                    .Select(dp => dp.IdProducto))
+                .Distinct()
+                .ToList();
+
             var productos = await _context.Productos
                 .Include(p => p.Receta)
                     .ThenInclude(r => r.DetalleRecetas)
                         .ThenInclude(d => d.Insumo)
-                .Where(p => idsProductos.Contains(p.IdProducto))
+                .Where(p => idsProductosACargar.Contains(p.IdProducto))
                 .ToListAsync();
 
             var idEmpleado = ObtenerIdEmpleado();
             decimal subtotal = 0;
+            decimal descuento = 0;
+            int? idPromocionPedido = null;
             var detalles = new List<DetallePedido>();
             var totalesInsumo = new Dictionary<int, decimal>();
 
+            // Acumula cantidad y precio por producto: una promoción y un producto pedido por
+            // separado terminan en una sola línea del pedido.
+            var lineas = new Dictionary<int, (int Cantidad, decimal Precio)>();
+
             foreach (var item in items)
             {
+                if (item.IdPromocion > 0)
+                {
+                    var promocion = promociones.FirstOrDefault(p => p.IdPromocion == item.IdPromocion);
+                    if (promocion == null)
+                    {
+                        return Json(new { ok = false, mensaje = "Hay una promoción inválida o que ya no está activa en la factura." });
+                    }
+
+                    var incluidos = (promocion.DetallePromociones ?? new List<DetallePromocion>())
+                        .Where(dp => dp.Producto != null && dp.Cantidad > 0)
+                        .ToList();
+
+                    if (incluidos.Count == 0)
+                    {
+                        return Json(new { ok = false, mensaje = $"La promoción \"{promocion.Nombre}\" no tiene productos cargados." });
+                    }
+
+                    if (promocion.Valor <= 0)
+                    {
+                        return Json(new { ok = false, mensaje = $"La promoción \"{promocion.Nombre}\" no tiene un precio válido." });
+                    }
+
+                    idPromocionPedido ??= promocion.IdPromocion;
+
+                    // Los productos entran a su precio de menú; la diferencia hasta el precio de la
+                    // promoción se guarda como descuento del pedido.
+                    foreach (var incluido in incluidos)
+                    {
+                        var productoIncluido = incluido.Producto!;
+                        var cantidadTotal = incluido.Cantidad * item.Cantidad;
+                        lineas[productoIncluido.IdProducto] = lineas.TryGetValue(productoIncluido.IdProducto, out var previa)
+                            ? (previa.Cantidad + cantidadTotal, productoIncluido.Precio)
+                            : (cantidadTotal, productoIncluido.Precio);
+                    }
+
+                    var valorMenu = incluidos.Sum(dp => dp.Producto!.Precio * dp.Cantidad) * item.Cantidad;
+                    var valorPromocion = promocion.Valor * item.Cantidad;
+                    subtotal += valorMenu;
+                    descuento += valorMenu - valorPromocion;
+                    continue;
+                }
+
                 var producto = productos.FirstOrDefault(p => p.IdProducto == item.IdProducto);
                 if (producto == null || producto.Precio <= 0)
                 {
                     return Json(new { ok = false, mensaje = "Hay un producto inválido o sin precio en la factura." });
                 }
 
-                var linea = item.Cantidad * producto.Precio;
-                subtotal += linea;
+                lineas[producto.IdProducto] = lineas.TryGetValue(producto.IdProducto, out var previaProducto)
+                    ? (previaProducto.Cantidad + item.Cantidad, producto.Precio)
+                    : (item.Cantidad, producto.Precio);
+                subtotal += producto.Precio * item.Cantidad;
+            }
+
+            if (descuento < 0) descuento = 0;
+
+            foreach (var linea in lineas)
+            {
+                var producto = productos.FirstOrDefault(p => p.IdProducto == linea.Key);
+                if (producto == null) continue;
+
+                var cantidad = linea.Value.Cantidad;
+                var precio = linea.Value.Precio;
 
                 detalles.Add(new DetallePedido
                 {
                     IdProducto = producto.IdProducto,
-                    Cantidad = item.Cantidad,
-                    PrecioUnitario = producto.Precio,
-                    Subtotal = linea,
-                    Observacion = string.IsNullOrWhiteSpace(item.Observacion)
-                        ? null
-                        : item.Observacion.Trim()
+                    Cantidad = cantidad,
+                    PrecioUnitario = precio,
+                    Subtotal = cantidad * precio
                 });
 
                 // Descontar insumos según la receta del producto: cantidad_receta x unidades vendidas.
@@ -157,7 +237,7 @@ namespace ELRINCONDORADO.Controllers
                     {
                         if (dr.IdInsumo == 0) continue;
 
-                        var totalInsumo = dr.Cantidad * item.Cantidad;
+                        var totalInsumo = dr.Cantidad * cantidad;
                         if (totalInsumo <= 0) continue;
 
                         var insumo = dr.Insumo;
@@ -170,6 +250,11 @@ namespace ELRINCONDORADO.Controllers
                             : totalInsumo;
                     }
                 }
+            }
+
+            if (detalles.Count == 0)
+            {
+                return Json(new { ok = false, mensaje = "El pedido no tiene productos para facturar." });
             }
 
             var estadoPago = string.IsNullOrWhiteSpace(modelo.MetodoPago)
@@ -222,13 +307,14 @@ namespace ELRINCONDORADO.Controllers
             {
                 IdEmpleado = idEmpleado ?? 0,
                 IdMesa = idMesa,
+                IdPromocion = idPromocionPedido,
                 TipoPedido = tipoPedido,
                 Estado = "PENDIENTE",
                 EstadoPago = estadoPago,
                 FechaCreacion = DateTime.UtcNow,
                 Subtotal = subtotal,
-                Descuento = 0,
-                Total = subtotal,
+                Descuento = descuento,
+                Total = subtotal - descuento,
                 NombrePedido = modelo.NombrePedido.Trim().ToUpperInvariant(),
                 IdCliente = idCliente,
                 Observaciones = string.IsNullOrWhiteSpace(modelo.Observaciones)
@@ -244,20 +330,8 @@ namespace ELRINCONDORADO.Controllers
             _context.Pedidos.Add(pedido);
             await _context.SaveChangesAsync();
 
-            // Cada factura emitida se registra en la tabla ventas (ingreso del día)
-            _context.Ventas.Add(new Venta
-            {
-                IdMesa = idMesa,
-                IdEmpleado = idEmpleado ?? 0,
-                FechaVenta = DateTime.UtcNow,
-                Subtotal = subtotal,
-                Descuento = 0,
-                Total = subtotal,
-                MetodoPago = estadoPago,
-                Estado = "PAGADA",
-                Observaciones = $"Pedido #{pedido.IdPedido} · Factura {pedido.NumeroPedido ?? "-"} · {pedido.NombrePedido}"
-            });
-            await _context.SaveChangesAsync();
+            // Notificar a la cocina en tiempo real mediante SignalR
+            await _hubContext.Clients.Group("Cocina").SendAsync("RecibirNuevoPedido", pedido.IdPedido);
 
             // Acumular las salidas del turno: si el insumo ya tiene un movimiento abierto (sin cierre),
             // se suma la cantidad al mismo registro; si no, se crea el registro de ese insumo.
@@ -290,13 +364,18 @@ namespace ELRINCONDORADO.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            TempData["Exito"] = $"Pedido #{pedido.IdPedido} facturado por {MonedaHelper.FormatearBs(subtotal)}. Stock descontado por receta.";
+            var totalCobrado = subtotal - descuento;
+            var detalleMensaje = descuento > 0
+                ? $" con un descuento de promoción de {MonedaHelper.FormatearBs(descuento)}"
+                : "";
+
+            TempData["Exito"] = $"Pedido #{pedido.IdPedido} facturado por {MonedaHelper.FormatearBs(totalCobrado)}{detalleMensaje}. Stock descontado por receta.";
             TempData["IdPedidoFacturado"] = pedido.IdPedido.ToString();
             return Json(new
             {
                 ok = true,
                 idPedido = pedido.IdPedido,
-                mensaje = $"Pedido #{pedido.IdPedido} facturado por {MonedaHelper.FormatearBs(subtotal)}."
+                mensaje = $"Pedido #{pedido.IdPedido} facturado por {MonedaHelper.FormatearBs(totalCobrado)}{detalleMensaje}."
             });
         }
 
@@ -333,6 +412,7 @@ namespace ELRINCONDORADO.Controllers
                 .Include(p => p.Empleado)
                 .Include(p => p.Cliente)
                 .Include(p => p.Mesa)
+                .Include(p => p.Promocion)
                 .Include(p => p.DetallesPedidos)
                     .ThenInclude(d => d.Producto)
                 .FirstOrDefaultAsync(p => p.IdPedido == id);
@@ -407,9 +487,12 @@ namespace ELRINCONDORADO.Controllers
             _context.CierresCaja.Add(cierre);
             await _context.SaveChangesAsync();
 
-            // Vincular todas las salidas (VENTA) aún abiertas al corte recién creado
+            // Vincular al corte recién creado todos los movimientos del turno que la pantalla de
+            // Movimientos muestra: salidas por venta, ajustes e ingresos por cancelaciones.
+            // (Las ENTRADA de las compras siguen fuera de esa pantalla, pero también se cierran
+            //  aquí para que no queden pendientes de un turno ya cerrado.)
             var movimientos = await _context.MovimientosInventario
-                .Where(m => m.IdCierre == null && m.TipoMovimiento == "VENTA")
+                .Where(m => m.IdCierre == null)
                 .ToListAsync();
             foreach (var m in movimientos)
                 m.IdCierre = cierre.IdCierre;
@@ -461,8 +544,10 @@ namespace ELRINCONDORADO.Controllers
                 .OrderBy(p => p.FechaCreacion)
                 .ToListAsync();
 
+            // Un pedido cancelado por el administrador no es una venta: no cuenta para el
+            // total del turno ni para ningún método de pago del reporte.
             var ventas = pedidos
-                .Where(p => p.FechaCreacion.ToLocalTime().Date == hoy)
+                .Where(p => p.Estado != "CANCELADO" && p.FechaCreacion.ToLocalTime().Date == hoy)
                 .ToList();
 
             var vm = new CierreCajaViewModel

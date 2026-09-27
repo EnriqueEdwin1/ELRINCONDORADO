@@ -52,7 +52,10 @@ namespace ELRINCONDORADO.Helpers
                         Separador(col);
 
                         // ===== Datos de la factura y del cliente =====
-                        LineaInfo(col, "Nº Factura:", pedido.NumeroPedido ?? $"{pedido.IdPedido:D4}");
+                        // Pedidos antiguos facturados sin número: se muestra el id del pedido.
+                        LineaInfo(col, "Nº Factura:", string.IsNullOrWhiteSpace(pedido.NumeroPedido)
+                            ? $"{pedido.IdPedido:D4}"
+                            : pedido.NumeroPedido);
                         LineaInfo(col, "Fecha:", pedido.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm"));
                         LineaInfo(col, "Tipo:", NombreTipo(pedido));
                         LineaInfo(col, "Estado:", pedido.Estado);
