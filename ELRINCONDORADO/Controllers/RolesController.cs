@@ -14,15 +14,36 @@ namespace ELRINCONDORADO.Controllers
             _context = context;
         }
 
+        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR.
+        // Este controller se generó por scaffolding y estaba SIN ninguna validación:
+        // sin ella, cualquier visita anonima podía crear o BORRAR roles. Sin vistas
+        // que lo enlacen, el GET fallaba, pero los POST sí se ejecutaban.
+        private IActionResult? ValidarAcceso()
+        {
+            if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
+                return RedirectToAction("Login", "Auth");
+
+            if (HttpContext.Session.GetString("Rol") != "ADMINISTRADOR")
+                return StatusCode(403, "Solo el administrador puede acceder a esta sección.");
+
+            return null;
+        }
+
         // GET: Roles
         public async Task<IActionResult> Index()
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             return View(await _context.Roles.ToListAsync());
         }
 
         // GET: Roles/Details/5
         public async Task<IActionResult> Details(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -41,6 +62,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: Roles/Create
         public IActionResult Create()
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             return View();
         }
 
@@ -49,6 +73,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("IdRol,Nombre,Descripcion")] Rol rol)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (ModelState.IsValid)
             {
                 _context.Add(rol);
@@ -61,6 +88,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: Roles/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -79,6 +109,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("IdRol,Nombre,Descripcion")] Rol rol)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id != rol.IdRol)
             {
                 return NotFound();
@@ -110,6 +143,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: Roles/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -130,6 +166,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             var rol = await _context.Roles.FindAsync(id);
             if (rol != null)
             {

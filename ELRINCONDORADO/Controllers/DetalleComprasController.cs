@@ -14,9 +14,27 @@ namespace ELRINCONDORADO.Controllers
             _context = context;
         }
 
+        // Verifica que haya sesion activa y que el rol sea ADMINISTRADOR.
+        // Este controller se genero por scaffolding y estaba SIN ninguna validacion:
+        // sin ella, cualquier visita anonima podia crear, editar o BORRAR registros.
+        // Sin vistas que lo enlacen, el GET fallaba, pero los POST si se ejecutaban.
+        private IActionResult? ValidarAcceso()
+        {
+            if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
+                return RedirectToAction("Login", "Auth");
+
+            if (HttpContext.Session.GetString("Rol") != "ADMINISTRADOR")
+                return StatusCode(403, "Solo el administrador puede acceder a esta seccion.");
+
+            return null;
+        }
+
         // GET: DetalleCompras
         public async Task<IActionResult> Index()
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             var detallesCompras = _context.DetallesCompras
                 .Include(d => d.Compra)
                 .Include(d => d.Insumo);
@@ -26,6 +44,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: DetalleCompras/Details/5
         public async Task<IActionResult> Details(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -46,6 +67,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: DetalleCompras/Create
         public IActionResult Create()
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             ViewData["IdCompra"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Compras, "IdCompra", "IdCompra");
             ViewData["IdInsumo"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Insumos, "IdInsumo", "Nombre");
             return View();
@@ -56,6 +80,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("IdDetalleCompra,IdCompra,IdInsumo,Cantidad,CostoUnitario,Subtotal")] DetalleCompra detalleCompra)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (ModelState.IsValid)
             {
                 _context.Add(detalleCompra);
@@ -70,6 +97,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: DetalleCompras/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -90,6 +120,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("IdDetalleCompra,IdCompra,IdInsumo,Cantidad,CostoUnitario,Subtotal")] DetalleCompra detalleCompra)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id != detalleCompra.IdDetalleCompra)
             {
                 return NotFound();
@@ -123,6 +156,9 @@ namespace ELRINCONDORADO.Controllers
         // GET: DetalleCompras/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             if (id == null)
             {
                 return NotFound();
@@ -145,6 +181,9 @@ namespace ELRINCONDORADO.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
             var detalleCompra = await _context.DetallesCompras.FindAsync(id);
             if (detalleCompra != null)
             {

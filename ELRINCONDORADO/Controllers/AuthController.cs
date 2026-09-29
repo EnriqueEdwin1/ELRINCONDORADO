@@ -1,20 +1,17 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
 using ELRINCONDORADO.Models;
-using System.Security.Cryptography;
-using System.Text;
+using ELRINCONDORADO.Services.Api;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class AuthController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly AuthApiService _authService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(AppDbContext context, ILogger<AuthController> logger)
+        public AuthController(AuthApiService authService, ILogger<AuthController> logger)
         {
-            _context = context;
+            _authService = authService;
             _logger = logger;
         }
 
@@ -36,44 +33,24 @@ namespace ELRINCONDORADO.Controllers
 
             try
             {
-                var empleado = await _context.Empleados
-                    .Include(e => e.Rol)
-                    .FirstOrDefaultAsync(e => e.Usuario == model.Usuario);
+                var loginExitoso = await _authService.LoginAsync(model.Usuario, model.Password);
 
-                if (empleado == null)
+                if (!loginExitoso)
                 {
                     _logger.LogWarning($"Intento de login fallido para usuario: {model.Usuario}");
                     return Unauthorized(new { mensaje = "Usuario o contraseña incorrectos" });
                 }
 
-                // Verificar contraseña (en producción usar hashing adecuado)
-                if (!VerifyPassword(model.Password, empleado.PasswordHash))
-                {
-                    _logger.LogWarning($"Contraseña incorrecta para usuario: {model.Usuario}");
-                    return Unauthorized(new { mensaje = "Usuario o contraseña incorrectos" });
-                }
+                var rol = HttpContext.Session.GetString("Rol");
+                var redirectUrl = GetDashboardUrl(rol);
 
-                if (empleado.Estado != "ACTIVO")
-                {
-                    _logger.LogWarning($"Intento de login con usuario inactivo: {model.Usuario}");
-                    return Unauthorized(new { mensaje = "Usuario inactivo" });
-                }
-
-                // Verificar si el rol tiene acceso al sistema
-                var redirectUrl = GetDashboardUrl(empleado.Rol?.Nombre);
                 if (string.IsNullOrEmpty(redirectUrl))
                 {
-                    _logger.LogWarning($"Rol sin acceso al sistema: {empleado.Rol?.Nombre} (usuario: {model.Usuario})");
+                    _logger.LogWarning($"Rol sin acceso al sistema: {rol} (usuario: {model.Usuario})");
                     return StatusCode(403, new { mensaje = "Su rol no tiene acceso al sistema" });
                 }
 
                 _logger.LogInformation($"Login exitoso para usuario: {model.Usuario}");
-
-                // Guardar información en sesión
-                HttpContext.Session.SetString("UsuarioId", empleado.IdEmpleado.ToString());
-                HttpContext.Session.SetString("Usuario", empleado.Usuario);
-                HttpContext.Session.SetString("Nombre", $"{empleado.Nombre} {empleado.Apellido}");
-                HttpContext.Session.SetString("Rol", empleado.Rol?.Nombre ?? "Sin rol");
 
                 return Ok(new { 
                     mensaje = "Login exitoso",
@@ -89,24 +66,10 @@ namespace ELRINCONDORADO.Controllers
 
         // POST: Auth/Logout
         [HttpPost]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
-            HttpContext.Session.Clear();
+            await _authService.LogoutAsync();
             return RedirectToAction("Login");
-        }
-
-        // Método auxiliar para verificar contraseña
-        private bool VerifyPassword(string password, string hash)
-        {
-            // Acepta tanto contraseñas en texto plano como hashes SHA256 en Base64
-            if (string.IsNullOrEmpty(hash))
-                return false;
-
-            if (string.Equals(password, hash, StringComparison.Ordinal))
-                return true;
-
-            var hashOfInput = HashPassword(password);
-            return hashOfInput == hash;
         }
 
         // Método auxiliar para devolver la URL del panel según el rol
@@ -121,17 +84,6 @@ namespace ELRINCONDORADO.Controllers
                 "ALMACEN" => "/Almacen",
                 _ => null
             };
-        }
-
-        // Método auxiliar para hashear contraseña
-        private string HashPassword(string password)
-        {
-            // En producción, usar BCrypt
-            using (var sha256 = SHA256.Create())
-            {
-                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(hashedBytes);
-            }
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using QuestPDF.Infrastructure;
 
 // Npgsql 6+ exige UTC para "timestamp with time zone"; las columnas usan "timestamp without time zone"
@@ -10,7 +11,17 @@ QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ===== HttpClient para comunicarse con la API =====
+builder.Services.AddHttpClient("ElRinconDoradoAPI", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7166");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
 // Add services to the container.
+// NOTA: El DbContext se mantiene temporalmente para compatibilidad durante la migración
+// En producción, esto debería eliminarse completamente cuando todos los controladores
+// usen servicios API en lugar de DbContext directo.
 builder.Services.AddDbContext<ELRINCONDORADO.Data.AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -23,6 +34,23 @@ builder.Services.AddSession(options =>
 });
 
 builder.Services.AddControllersWithViews();
+
+// ===== Autenticación por cookies para MVC =====
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Auth/Login";
+        options.AccessDeniedPath = "/Home/Error";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    });
+
+builder.Services.AddHttpContextAccessor();
+
+// ===== Registrar servicios API =====
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.AuthApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.ProductosApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.PedidosApiService>();
+
 builder.Services.AddSignalR();
 
 // Aviso sonoro de "pedido nuevo pendiente" cada 10 s, solo mientras haya una pantalla de cocina
