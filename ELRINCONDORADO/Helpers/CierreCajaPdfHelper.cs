@@ -43,7 +43,7 @@ namespace ELRINCONDORADO.Helpers
                             enc.Item().AlignCenter().Text("REPORTE DE CIERRE DE CAJA")
                                 .FontSize(13).Bold();
                             enc.Item().AlignCenter()
-                                .Text($"Cajero: {vm.Cajero}   |   Fecha: {vm.Fecha.ToString("dd/MM/yyyy HH:mm")}")
+                                .Text($"Cajero: {vm.Cajero}   |   Fecha: {vm.Fecha?.ToString("dd/MM/yyyy HH:mm") ?? "N/A"}")
                                 .FontSize(9).FontColor(Colors.Grey.Darken1);
                         });
                         });

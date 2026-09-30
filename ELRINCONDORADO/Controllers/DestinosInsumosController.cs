@@ -1,20 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class DestinosInsumosController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly InsumosApiService _apiService;
 
-        public DestinosInsumosController(AppDbContext context)
+        public DestinosInsumosController(InsumosApiService apiService)
         {
-            _context = context;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -26,153 +25,109 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: DestinosInsumos
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View("~/Views/Administrador/DestinosInsumos/Index.cshtml",
-                await _context.DestinosInsumos.Include(d => d.Insumos).ToListAsync());
+            var destinos = await _apiService.GetDestinosAsync();
+            var model = destinos.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Index.cshtml", model);
         }
 
-        // GET: DestinosInsumos/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var destino = await _context.DestinosInsumos
-                .Include(d => d.Insumos)
-                .FirstOrDefaultAsync(m => m.IdDestino == id);
-            if (destino == null)
-            {
-                return NotFound();
-            }
+            var destinos = await _apiService.GetDestinosAsync();
+            var destino = destinos?.FirstOrDefault(d => d.IdDestino == id);
+            if (destino == null) return NotFound();
 
-            return View("~/Views/Administrador/DestinosInsumos/Details.cshtml", destino);
+            var model = destino.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Details.cshtml", model);
         }
 
-        // GET: DestinosInsumos/Create
         public IActionResult Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View("~/Views/Administrador/DestinosInsumos/Create.cshtml", new DestinoInsumo());
+            return View("~/Views/Administrador/DestinosInsumos/Create.cshtml");
         }
 
-        // POST: DestinosInsumos/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdDestino,Nombre")] DestinoInsumo destino)
+        public async Task<IActionResult> Create(DestinoInsumoDto destino)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
             if (ModelState.IsValid)
             {
-                if (await _context.DestinosInsumos.AnyAsync(d => d.Nombre == destino.Nombre))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese destino ya existe.");
-                    return View("~/Views/Administrador/DestinosInsumos/Create.cshtml", destino);
-                }
+                var (success, message) = await _apiService.CreateDestinoAsync(destino);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                _context.Add(destino);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View("~/Views/Administrador/DestinosInsumos/Create.cshtml", destino);
+            var model = destino.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Create.cshtml", model);
         }
 
-        // GET: DestinosInsumos/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var destino = await _context.DestinosInsumos.FindAsync(id);
-            if (destino == null)
-            {
-                return NotFound();
-            }
-            return View("~/Views/Administrador/DestinosInsumos/Edit.cshtml", destino);
+            var destinos = await _apiService.GetDestinosAsync();
+            var destino = destinos?.FirstOrDefault(d => d.IdDestino == id);
+            if (destino == null) return NotFound();
+
+            var model = destino.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Edit.cshtml", model);
         }
 
-        // POST: DestinosInsumos/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdDestino,Nombre")] DestinoInsumo destino)
+        public async Task<IActionResult> Edit(int id, DestinoInsumoDto destino)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != destino.IdDestino)
-            {
-                return NotFound();
-            }
+            if (id != destino.IdDestino) return NotFound();
 
             if (ModelState.IsValid)
             {
-                if (await _context.DestinosInsumos.AnyAsync(d => d.Nombre == destino.Nombre && d.IdDestino != destino.IdDestino))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese destino ya existe.");
-                    return View("~/Views/Administrador/DestinosInsumos/Edit.cshtml", destino);
-                }
+                var (success, message) = await _apiService.EditDestinoAsync(id, destino);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                try
-                {
-                    _context.Update(destino);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!DestinoInsumoExists(destino.IdDestino))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View("~/Views/Administrador/DestinosInsumos/Edit.cshtml", destino);
+            var model = destino.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Edit.cshtml", model);
         }
 
-        // GET: DestinosInsumos/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var destino = await _context.DestinosInsumos
-                .FirstOrDefaultAsync(m => m.IdDestino == id);
-            if (destino == null)
-            {
-                return NotFound();
-            }
+            var destinos = await _apiService.GetDestinosAsync();
+            var destino = destinos?.FirstOrDefault(d => d.IdDestino == id);
+            if (destino == null) return NotFound();
 
-            return View("~/Views/Administrador/DestinosInsumos/Delete.cshtml", destino);
+            var model = destino.ToModel();
+            return View("~/Views/Administrador/DestinosInsumos/Delete.cshtml", model);
         }
 
-        // POST: DestinosInsumos/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -180,24 +135,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var destino = await _context.DestinosInsumos.FindAsync(id);
-            if (destino != null)
-            {
-                if (await _context.Insumos.AnyAsync(i => i.IdDestino == id))
-                {
-                    TempData["Error"] = "No se puede eliminar el destino porque hay insumos asignados a él.";
-                    return RedirectToAction(nameof(Index));
-                }
+            var (success, message) = await _apiService.DeleteDestinoAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-                _context.DestinosInsumos.Remove(destino);
-                await _context.SaveChangesAsync();
-            }
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool DestinoInsumoExists(int id)
-        {
-            return _context.DestinosInsumos.Any(e => e.IdDestino == id);
         }
     }
 }

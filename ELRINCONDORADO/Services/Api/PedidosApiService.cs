@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Services.Api
 {
@@ -81,7 +82,7 @@ namespace ELRINCONDORADO.Services.Api
             }
         }
 
-        public async Task<PedidoDto?> GetByIdAsync(int id)
+        public async Task<PedidoDetalleDto?> GetByIdAsync(int id)
         {
             try
             {
@@ -90,7 +91,7 @@ namespace ELRINCONDORADO.Services.Api
                 response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();
-                return JsonSerializer.Deserialize<PedidoDto>(content, new JsonSerializerOptions
+                return JsonSerializer.Deserialize<PedidoDetalleDto>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
@@ -101,53 +102,52 @@ namespace ELRINCONDORADO.Services.Api
                 return null;
             }
         }
-    }
 
-    public class PedidoPaginadoDto
-    {
-        public List<PedidoDto> Pedidos { get; set; } = new();
-        public int Total { get; set; }
-        public int Page { get; set; }
-        public int PageSize { get; set; }
-        public int TotalPages => (int)Math.Ceiling((double)Total / PageSize);
-    }
+        /// Reenvía el pedido del POS a la API. La API responde JSON tanto en éxito
+        /// (ok=true, idPedido) como en error (ok=false, mensaje), así que se lee el
+        /// cuerpo siempre, no solo cuando el HTTP code es 2xx.
+        public async Task<CrearPedidoResponse?> CrearAsync(CrearPedidoRequest request)
+        {
+            try
+            {
+                var client = GetClient();
+                var json = JsonSerializer.Serialize(request);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-    public class PedidoDto
-    {
-        public int IdPedido { get; set; }
-        public string TipoPedido { get; set; } = string.Empty;
-        public string Estado { get; set; } = string.Empty;
-        public string EstadoPago { get; set; } = string.Empty;
-        public DateTime FechaCreacion { get; set; }
-        public decimal Subtotal { get; set; }
-        public decimal Descuento { get; set; }
-        public decimal Total { get; set; }
-        public string? NombrePedido { get; set; }
-        public string? NumeroPedido { get; set; }
-        public string? Observaciones { get; set; }
-        public int? IdMesa { get; set; }
-        public int? NumeroMesa { get; set; }
-        public int IdEmpleado { get; set; }
-        public string? NombreCajero { get; set; }
-        public int? IdPromocion { get; set; }
-        public string? NombrePromocion { get; set; }
-        public int? IdCliente { get; set; }
-        public string? NitCliente { get; set; }
-        public string? RazonSocialCliente { get; set; }
-        public List<DetallePedidoDto> Detalles { get; set; } = new();
-    }
+                var response = await client.PostAsync("/api/pedidos", content);
+                var body = await response.Content.ReadAsStringAsync();
 
-    public class DetallePedidoDto
-    {
-        public int IdDetallePedido { get; set; }
-        public int IdPedido { get; set; }
-        public int IdProducto { get; set; }
-        public string? NombreProducto { get; set; }
-        public int Cantidad { get; set; }
-        public decimal PrecioUnitario { get; set; }
-        public decimal Subtotal { get; set; }
-        public string? Observacion { get; set; }
-        public decimal PrecioActual { get; set; }
-        public bool PrecioDifiere { get; set; }
+                var resultado = JsonSerializer.Deserialize<CrearPedidoResponse>(body, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                return resultado ?? new CrearPedidoResponse { Ok = false, Mensaje = "La API no devolvió una respuesta válida." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al crear pedido");
+                return new CrearPedidoResponse { Ok = false, Mensaje = "No se pudo contactar con la API." };
+            }
+        }
+
+        /// Actualiza el estado de un pedido (PUT /api/pedidos/{id}/estado).
+        public async Task<bool> CambiarEstadoAsync(int id, string estado)
+        {
+            try
+            {
+                var client = GetClient();
+                var json = JsonSerializer.Serialize(new { estado });
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PutAsync($"/api/pedidos/{id}/estado", content);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error al cambiar estado del pedido {id}");
+                return false;
+            }
+        }
     }
 }

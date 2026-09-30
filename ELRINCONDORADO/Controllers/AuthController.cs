@@ -18,7 +18,7 @@ namespace ELRINCONDORADO.Controllers
         // GET: Auth/Login
         public IActionResult Login()
         {
-            return View("~/Views/Home/Index.cshtml");
+            return View("~/Views/Home/Index.cshtml", new LoginViewModel());
         }
 
         // POST: Auth/Login

@@ -1,0 +1,136 @@
+@model ELRINCONDORADO.Models.ApiDtos.CierreCajaDetalleDto
+@{
+    ViewData["Title"] = "Detalle de Cierre de Caja";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/marca.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>🧾 Detalle de Cierre de Caja #@Model.IdCierre</h2>
+            <a href="/CierresCaja" class="btn btn-secondary">← Volver</a>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Información del Cierre</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>ID:</strong> @Model.IdCierre</p>
+                        <p><strong>Fecha:</strong> @Model.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        <p><strong>Empleado:</strong> @Model.EmpleadoNombre</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Total Ventas:</strong> @((Model.TotalVentas ?? 0).ToString("C2"))</p>
+                        <p><strong>Movimientos Cerrados:</strong> @Model.MovimientosCerrados</p>
+                        @if (Model.TurnoDesde.HasValue)
+                        {
+                            <p><strong>Turno desde:</strong> @Model.TurnoDesde.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Movimientos de Inventario</div>
+            <div class="card-body">
+                @if (Model.Movimientos != null && Model.Movimientos.Any())
+                {
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Cantidad</th>
+                                <th>Unidades</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var movimiento in Model.Movimientos)
+                            {
+                                <tr>
+                                    <td>@movimiento.TipoMovimiento</td>
+                                    <td>@movimiento.Cantidad</td>
+                                    <td>@movimiento.Unidades</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="text-muted">No hay movimientos de inventario asociados a este cierre.</p>
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Ventas Incluidas (@Model.VentasIncluidas.Count)</div>
+            <div class="card-body">
+                @if (Model.VentasIncluidas != null && Model.VentasIncluidas.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID Pedido</th>
+                                    <th>Número</th>
+                                    <th>Cliente</th>
+                                    <th>Estado Pago</th>
+                                    <th>Fecha</th>
+                                    <th>Subtotal</th>
+                                    <th>Descuento</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var venta in Model.VentasIncluidas)
+                                {
+                                    <tr>
+                                        <td>@venta.IdPedido</td>
+                                        <td>@venta.NumeroPedido</td>
+                                        <td>@venta.NombrePedido</td>
+                                        <td>@venta.EstadoPago</td>
+                                        <td>@venta.FechaCreacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@venta.Subtotal.ToString("C2")</td>
+                                        <td>@venta.Descuento.ToString("C2")</td>
+                                        <td>@venta.Total.ToString("C2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">No hay ventas asociadas a este cierre.</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

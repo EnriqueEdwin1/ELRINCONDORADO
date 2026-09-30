@@ -1,167 +1,123 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
-using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Services.Api;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class MesasController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly MesasApiService _apiService;
 
-        public MesasController(AppDbContext context)
+        public MesasController(MesasApiService apiService)
         {
-            _context = context;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesion activa y que el rol sea ADMINISTRADOR.
-        // Este controller se genero por scaffolding y estaba SIN ninguna validacion:
-        // sin ella, cualquier visita anonima podia crear, editar o BORRAR registros.
-        // Sin vistas que lo enlacen, el GET fallaba, pero los POST si se ejecutaban.
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
                 return RedirectToAction("Login", "Auth");
 
             if (HttpContext.Session.GetString("Rol") != "ADMINISTRADOR")
-                return StatusCode(403, "Solo el administrador puede acceder a esta seccion.");
+                return StatusCode(403, "Solo el administrador puede acceder a esta sección.");
 
             return null;
         }
 
-        // GET: Mesas
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View(await _context.Mesas.ToListAsync());
+            var mesas = await _apiService.GetAllAsync();
+            return View("~/Views/Administrador/Mesas/Index.cshtml", mesas);
         }
 
-        // GET: Mesas/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var mesa = await _context.Mesas
-                .FirstOrDefaultAsync(m => m.IdMesa == id);
-            if (mesa == null)
-            {
-                return NotFound();
-            }
+            var mesa = await _apiService.GetByIdAsync(id.Value);
+            if (mesa == null) return NotFound();
 
-            return View(mesa);
+            return View("~/Views/Administrador/Mesas/Details.cshtml", mesa);
         }
 
-        // GET: Mesas/Create
         public IActionResult Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View();
+            return View("~/Views/Administrador/Mesas/Create.cshtml");
         }
 
-        // POST: Mesas/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdMesa,Numero,Capacidad,Estado")] Mesa mesa)
+        public async Task<IActionResult> Create(MesaDto mesa)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
             if (ModelState.IsValid)
             {
-                _context.Add(mesa);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                var (success, message) = await _apiService.CreateAsync(mesa);
+                if (success)
+                    return RedirectToAction(nameof(Index));
+
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View(mesa);
+            return View("~/Views/Administrador/Mesas/Create.cshtml", mesa);
         }
 
-        // GET: Mesas/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var mesa = await _context.Mesas.FindAsync(id);
-            if (mesa == null)
-            {
-                return NotFound();
-            }
-            return View(mesa);
+            var mesa = await _apiService.GetByIdAsync(id.Value);
+            if (mesa == null) return NotFound();
+
+            return View("~/Views/Administrador/Mesas/Edit.cshtml", mesa);
         }
 
-        // POST: Mesas/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdMesa,Numero,Capacidad,Estado")] Mesa mesa)
+        public async Task<IActionResult> Edit(int id, MesaDto mesa)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != mesa.IdMesa)
-            {
-                return NotFound();
-            }
+            if (id != mesa.IdMesa) return NotFound();
 
             if (ModelState.IsValid)
             {
-                try
-                {
-                    _context.Update(mesa);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!MesaExists(mesa.IdMesa))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                var (success, message) = await _apiService.EditAsync(id, mesa);
+                if (success)
+                    return RedirectToAction(nameof(Index));
+
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View(mesa);
+            return View("~/Views/Administrador/Mesas/Edit.cshtml", mesa);
         }
 
-        // GET: Mesas/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var mesa = await _context.Mesas
-                .FirstOrDefaultAsync(m => m.IdMesa == id);
-            if (mesa == null)
-            {
-                return NotFound();
-            }
+            var mesa = await _apiService.GetByIdAsync(id.Value);
+            if (mesa == null) return NotFound();
 
-            return View(mesa);
+            return View("~/Views/Administrador/Mesas/Delete.cshtml", mesa);
         }
 
-        // POST: Mesas/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -169,18 +125,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var mesa = await _context.Mesas.FindAsync(id);
-            if (mesa != null)
-            {
-                _context.Mesas.Remove(mesa);
-                await _context.SaveChangesAsync();
-            }
-            return RedirectToAction(nameof(Index));
-        }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-        private bool MesaExists(int id)
-        {
-            return _context.Mesas.Any(e => e.IdMesa == id);
+            return RedirectToAction(nameof(Index));
         }
     }
 }

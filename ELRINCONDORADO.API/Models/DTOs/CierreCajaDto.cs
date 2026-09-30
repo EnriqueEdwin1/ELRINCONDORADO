@@ -70,3 +70,9 @@ public class CierreCajaVentaDto
     public decimal Descuento { get; set; }
     public decimal Total { get; set; }
 }
+
+// DTO para crear un cierre de caja
+public class CierreCajaCreateDto
+{
+    public int IdEmpleado { get; set; }
+}

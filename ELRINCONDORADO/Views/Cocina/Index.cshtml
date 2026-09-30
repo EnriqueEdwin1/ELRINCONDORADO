@@ -7,7 +7,7 @@
     var nombre = Context.Session.GetString("Nombre");
     var rol = Context.Session.GetString("Rol");
     var hayPedidos = Model != null && Model.Any();
-    var listos = hayPedidos ? Model.Count(p => p.Estado == "LISTO") : 0;
+    var listos = Model?.Count(p => p.Estado == "LISTO") ?? 0;
 }
 
 <!DOCTYPE html>
@@ -170,7 +170,7 @@
                 <span class="badge-lista" id="envoltorioListos" style="display:@(listos > 0 ? "" : "none");">
                     ✅ <span id="contadorListos">@listos</span> listo@(listos == 1 ? "" : "s")
                 </span>
-                <a href="/Cocina/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorCola">@(hayPedidos ? Model.Count() : 0)</span> en cola</a>
+                <a href="/Cocina/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorCola">@(Model?.Count() ?? 0)</span> en cola</a>
             </div>
         </div>
 
@@ -202,7 +202,7 @@
         else
         {
             <div class="row" id="colaPedidos">
-                @foreach (var pedido in Model)
+                @foreach (var pedido in Model ?? Enumerable.Empty<Pedido>())
                 {
                     var clase = pedido.Estado == "LISTO" ? "listo"
                         : pedido.Estado == "EN PREPARACION" ? "prep"
@@ -303,6 +303,9 @@
     </div>
 
     <div id="fToken" style="display:none;">@Html.AntiForgeryToken()</div>
+
+    <!-- Audio para pedidos pendientes -->
+    <audio id="audioPedidoPendiente" src="~/audio/pedidos/nuevo.wav" preload="auto"></audio>
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
@@ -466,6 +469,7 @@
         function renderCola(datos) {
             var hay = datos && datos.length > 0;
             var cuantosListos = hay ? datos.filter(function (p) { return p.estado === 'LISTO'; }).length : 0;
+            var cuantosPendientes = hay ? datos.filter(function (p) { return p.estado === 'PENDIENTE'; }).length : 0;
             contador.textContent = hay ? datos.length : 0;
             if (contadorListos) {
                 contadorListos.textContent = cuantosListos;
@@ -546,6 +550,40 @@
             });
             html += '</div>';
             contenedor.innerHTML = html;
+
+            // Reproducir audio si hay pedidos pendientes
+            if (cuantosPendientes > 0) {
+                reproducirAudioPendiente();
+            }
+        }
+
+        // ================= Audio para pedidos pendientes =================
+        var intervaloAudio = null;
+        function reproducirAudioPendiente() {
+            var audio = document.getElementById('audioPedidoPendiente');
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(function (e) {
+                    console.log('No se pudo reproducir audio:', e);
+                });
+            }
+        }
+
+        function iniciarAudioPendiente() {
+            // Reproducir audio cada 10 segundos si hay pedidos pendientes
+            intervaloAudio = setInterval(function () {
+                var pedidosPendientes = document.querySelectorAll('.chip-pendiente');
+                if (pedidosPendientes.length > 0) {
+                    reproducirAudioPendiente();
+                }
+            }, 10000);
+        }
+
+        function detenerAudioPendiente() {
+            if (intervaloAudio) {
+                clearInterval(intervaloAudio);
+                intervaloAudio = null;
+            }
         }
 
         var recargaHecha = false;
@@ -620,11 +658,19 @@
         // Iniciar SignalR
         iniciarSignalR();
 
+        // Iniciar audio para pedidos pendientes
+        iniciarAudioPendiente();
+
         // Tablero: poll cada 2 s como respaldo. SignalR maneja las actualizaciones en tiempo real.
         actualizarCola();
         latidoCocina();
         setInterval(actualizarCola, 2000);
         setInterval(latidoCocina, 10000);
+
+        // Detener audio al cerrar la página
+        window.addEventListener('beforeunload', function () {
+            detenerAudioPendiente();
+        });
     </script>
 
 </body>

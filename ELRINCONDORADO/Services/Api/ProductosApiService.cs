@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Services.Api
 {
@@ -81,44 +82,92 @@ namespace ELRINCONDORADO.Services.Api
                 return null;
             }
         }
+
+        public async Task<(bool success, string message)> CreateAsync(ProductoDto producto)
+        {
+            try
+            {
+                var client = GetClient();
+                var json = JsonSerializer.Serialize(producto);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync("/api/productos", content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                    return (true, "Producto creado exitosamente.");
+
+                return (false, responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al crear producto");
+                return (false, "Error al crear producto.");
+            }
+        }
+
+        public async Task<(bool success, string message)> EditAsync(int id, ProductoDto producto)
+        {
+            try
+            {
+                var client = GetClient();
+                var json = JsonSerializer.Serialize(producto);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PutAsync($"/api/productos/{id}", content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                    return (true, "Producto actualizado exitosamente.");
+
+                return (false, responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error al actualizar producto {id}");
+                return (false, "Error al actualizar producto.");
+            }
+        }
+
+        public async Task<(bool success, string message)> QuitarImagenAsync(int id)
+        {
+            try
+            {
+                var client = GetClient();
+                var response = await client.PutAsync($"/api/productos/{id}/quitar-imagen", null);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                    return (true, "Imagen del producto eliminada exitosamente.");
+
+                return (false, responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error al quitar la imagen del producto {id}");
+                return (false, "Error al quitar la imagen.");
+            }
+        }
+
+        public async Task<(bool success, string message)> DeleteAsync(int id)
+        {
+            try
+            {
+                var client = GetClient();
+                var response = await client.DeleteAsync($"/api/productos/{id}");
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                    return (true, "Producto eliminado exitosamente.");
+
+                return (false, responseContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error al eliminar producto {id}");
+                return (false, "Error al eliminar producto.");
+            }
+        }
     }
 
-    public class ProductoDto
-    {
-        public int IdProducto { get; set; }
-        public string? Codigo { get; set; }
-        public string Nombre { get; set; } = string.Empty;
-        public string? Descripcion { get; set; }
-        public decimal Precio { get; set; }
-        public bool Activo { get; set; }
-        public string? ImagenUrl { get; set; }
-        public string? DisplayUrl { get; set; }
-        public int IdCategoria { get; set; }
-        public string? CategoriaNombre { get; set; }
-        public bool TieneReceta { get; set; }
-    }
-
-    public class ProductoDetalleDto : ProductoDto
-    {
-        public RecetaDto? Receta { get; set; }
-    }
-
-    public class RecetaDto
-    {
-        public int IdReceta { get; set; }
-        public int IdProducto { get; set; }
-        public string? ProductoNombre { get; set; }
-        public string? Descripcion { get; set; }
-        public bool Activo { get; set; }
-        public List<RecetaDetalleDto> Detalles { get; set; } = new();
-    }
-
-    public class RecetaDetalleDto
-    {
-        public int IdDetalleReceta { get; set; }
-        public int IdInsumo { get; set; }
-        public string? InsumoNombre { get; set; }
-        public decimal Cantidad { get; set; }
-        public string? UnidadMedida { get; set; }
-    }
 }

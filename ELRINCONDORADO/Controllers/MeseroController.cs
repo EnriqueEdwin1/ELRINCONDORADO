@@ -1,24 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using ELRINCONDORADO.Services.Api;
+using ELRINCONDORADO.Models.ApiDtos;
 using ELRINCONDORADO.Models;
-using ELRINCONDORADO.Hubs;
-using Microsoft.AspNetCore.SignalR;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class MeseroController : Controller
     {
-        private readonly AppDbContext _context;
-        private readonly IHubContext<PedidosHub> _hubContext;
+        private readonly MeseroApiService _apiService;
 
-        public MeseroController(AppDbContext context, IHubContext<PedidosHub> hubContext)
+        public MeseroController(MeseroApiService apiService)
         {
-            _context = context;
-            _hubContext = hubContext;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea MESERO
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -30,25 +25,35 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: Mesero -> pedidos en estado LISTO (cocina terminó) para servir a la mesa
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var pedidos = await _context.Pedidos
-                .Include(p => p.Mesa)
-                .Include(p => p.Empleado)
-                .Include(p => p.DetallesPedidos)
-                    .ThenInclude(d => d.Producto)
-                .Where(p => p.Estado == "LISTO")
-                .OrderByDescending(p => p.FechaCreacion)
-                .ToListAsync();
+            var pedidosDto = await _apiService.GetPedidosEntregarAsync();
+            var pedidos = pedidosDto?.Select(p => p.ToModel()).ToList() ?? new List<Pedido>();
 
-            return View(pedidos);
+            return View("~/Views/Mesero/Index.cshtml", pedidos);
         }
 
-        // POST: Mesero/Entregar -> el mesero lleva el pedido a la mesa y lo marca ENTREGADO
+        public async Task<IActionResult> Historial()
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var empleadoIdStr = HttpContext.Session.GetString("UsuarioId");
+            if (!int.TryParse(empleadoIdStr, out var empleadoId))
+            {
+                TempData["Error"] = "No se pudo identificar al mesero.";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var pedidosDto = await _apiService.GetHistorialAsync(empleadoId);
+            var pedidos = pedidosDto?.Select(p => p.ToModel()).ToList() ?? new List<Pedido>();
+
+            return View("~/Views/Mesero/Historial.cshtml", pedidos);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Entregar(int id)
@@ -56,24 +61,16 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var pedido = await _context.Pedidos.FindAsync(id);
-            if (pedido == null) return NotFound();
-
-            // Un pedido cancelado por el administrador es definitivo: el mesero no lo revive.
-            if (pedido.Estado == "CANCELADO")
+            var (success, message) = await _apiService.EntregarAsync(id);
+            if (!success)
             {
-                TempData["Exito"] = $"El pedido #{pedido.IdPedido} está cancelado: no se puede entregar.";
-                return RedirectToAction(nameof(Index));
+                TempData["Error"] = message;
+            }
+            else
+            {
+                TempData["Exito"] = "Pedido entregado exitosamente.";
             }
 
-            pedido.Estado = "ENTREGADO";
-            await _context.SaveChangesAsync();
-
-            // Notificar a la cocina en tiempo real mediante SignalR
-            await _hubContext.Clients.Group("Cocina").SendAsync("RecibirCambioEstado", pedido.IdPedido, "ENTREGADO");
-            await _hubContext.Clients.Group("Cajero").SendAsync("RecibirCambioEstado", pedido.IdPedido, "ENTREGADO");
-
-            TempData["Exito"] = $"Pedido #{pedido.IdPedido} marcado como ENTREGADO.";
             return RedirectToAction(nameof(Index));
         }
     }

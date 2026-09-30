@@ -1,7 +1,5 @@
 using System.Globalization;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Localization;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using QuestPDF.Infrastructure;
 
 // Npgsql 6+ exige UTC para "timestamp with time zone"; las columnas usan "timestamp without time zone"
@@ -11,6 +9,10 @@ QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Secretos locales (user-secrets), donde vive la clave de ImgBB y otras
+// credenciales que por seguridad no deben estar en appsettings.json.
+builder.Configuration.AddUserSecrets<Program>();
+
 // ===== HttpClient para comunicarse con la API =====
 builder.Services.AddHttpClient("ElRinconDoradoAPI", client =>
 {
@@ -19,11 +21,7 @@ builder.Services.AddHttpClient("ElRinconDoradoAPI", client =>
 });
 
 // Add services to the container.
-// NOTA: El DbContext se mantiene temporalmente para compatibilidad durante la migración
-// En producción, esto debería eliminarse completamente cuando todos los controladores
-// usen servicios API en lugar de DbContext directo.
-builder.Services.AddDbContext<ELRINCONDORADO.Data.AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// El MVC ya no usa DbContext directamente - todos los datos vienen de la API.
 
 // Agregar sesiones
 builder.Services.AddSession(options =>
@@ -35,21 +33,27 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddControllersWithViews();
 
-// ===== Autenticación por cookies para MVC =====
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/Auth/Login";
-        options.AccessDeniedPath = "/Home/Error";
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    });
-
 builder.Services.AddHttpContextAccessor();
 
 // ===== Registrar servicios API =====
 builder.Services.AddScoped<ELRINCONDORADO.Services.Api.AuthApiService>();
 builder.Services.AddScoped<ELRINCONDORADO.Services.Api.ProductosApiService>();
 builder.Services.AddScoped<ELRINCONDORADO.Services.Api.PedidosApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.CategoriasApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.InsumosApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.ProveedoresApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.MesasApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.EmpleadosApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.ComprasApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.CierresCajaApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.MovimientosInventarioApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.RolesApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.PromocionesApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.RecetasApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.VentasApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.CocinaApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.MeseroApiService>();
+builder.Services.AddScoped<ELRINCONDORADO.Services.Api.ClientesApiService>();
 
 builder.Services.AddSignalR();
 

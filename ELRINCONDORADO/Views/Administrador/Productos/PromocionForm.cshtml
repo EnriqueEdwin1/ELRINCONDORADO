@@ -4,6 +4,11 @@
     ViewData["Title"] = Model.EsEdicion ? "Editar Promoción" : "Nueva Promoción";
     Layout = null;
     var nombre = Context.Session.GetString("Nombre");
+    // Catálogo completo que alimenta al buscador de productos en tiempo real.
+    var catalogoJson = Model.Incluidos == null
+        ? "[]"
+        : System.Text.Json.JsonSerializer.Serialize(
+            Model.Incluidos.Select(p => new { p.IdProducto, p.Nombre, p.Precio, p.Activo, p.Seleccionado }));
 }
 
 <!DOCTYPE html>
@@ -96,33 +101,36 @@
                             <div class="col-sm-6">
                                 <label class="form-label" for="Estado">Estado</label>
                                 <select class="form-select" id="Estado" name="Estado">
-                                    <option value="ACTIVA" selected="@(Model.Estado == "ACTIVA")">Activa (aparece en el cajero)</option>
-                                    <option value="INACTIVA" selected="@(Model.Estado == "INACTIVA")">Inactiva (oculta en el cajero)</option>
+                                    @* En HTML el atributo selected vale por su presencia:
+                                       selected="False" seguía dejando marcada la opción,
+                                       así que se escribe el atributo o nada. *@
+                                    <option value="ACTIVA" selected="@(Model.Estado == "ACTIVA" ? "selected" : null)">Activa (aparece en el cajero)</option>
+                                    <option value="INACTIVA" selected="@(Model.Estado == "INACTIVA" ? "selected" : null)">Inactiva (oculta en el cajero)</option>
                                 </select>
                             </div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label" for="imagenPromocion">Imagen de la promoción</label>
-                            <input type="file" name="imagenFile" id="imagenPromocion" class="form-control" accept="image/*" />
+                            <input type="file" name="imagenFile" id="imagenPromocion" class="form-control" accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tif,.tiff,.svg,.avif,.heic,.heif" />
                             <div id="previewPromocionContainer" class="mt-2" style="display: none;">
                                 <img id="previewPromocion" class="img-thumbnail" style="max-height: 150px;" alt="Vista previa" />
                             </div>
-                            <div class="form-text">Se sube a ImgBB y sale en la lista, en el detalle y en el cajero (opcional).</div>
+                            <div class="form-text">Se sube a ImgBB y sale en la lista, en el detalle y en el cajero (opcional). Se aceptan imágenes de cualquier formato: JPG, PNG, GIF, WEBP, BMP, TIFF, SVG, HEIC, AVIF, etc.</div>
                         </div>
                     </div>
 
                     <div class="form-card p-3">
                         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                             <h5 class="mb-0">Productos incluidos</h5>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTodos">Marcar todos</button>
                         </div>
                         <p class="text-muted small">
-                            Marca los productos que incluye la promoción y la cantidad de cada uno. Esos productos
-                            son los que se descuentan del stock y los que salen en el pedido.
+                            Escribe en el buscador para encontrar productos del menú y agrégalos con un clic.
+                            Cada producto incluido se muestra abajo con su cantidad; los ya agregados
+                            dejan de aparecer en el buscador.
                         </p>
 
-                        @if (!Model.Incluidos.Any())
+                        @if (Model.Incluidos == null || !Model.Incluidos.Any())
                         {
                             <div class="alert alert-warning mb-0">
                                 Todavía no hay productos en el catálogo.
@@ -131,32 +139,51 @@
                         }
                         else
                         {
+                            <div class="buscador-productos mb-3">
+                                <div class="input-group">
+                                    <span class="input-group-text">🔎</span>
+                                    <input type="text" id="buscadorProductos" class="form-control"
+                                           placeholder="Buscar producto por nombre y agregarlo..."
+                                           autocomplete="off" />
+                                </div>
+                                <div id="resultadosBusqueda" class="list-group shadow-sm" style="display: none;">
+                                </div>
+                            </div>
+
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle mb-0" id="tablaIncluidos">
                                     <thead>
                                         <tr>
-                                            <th style="width: 44px;">Incluye</th>
+                                            <th style="width: 44px;"></th>
                                             <th>Producto</th>
                                             <th class="text-end" style="width: 110px;">Precio</th>
                                             <th class="text-center" style="width: 90px;">Cantidad</th>
                                             <th class="text-end" style="width: 120px;">Subtotal</th>
+                                            <th style="width: 44px;"></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @{ var indice = 0; }
-                                        @foreach (var item in Model.Incluidos)
+                                        @foreach (var item in Model.Incluidos.Where(p => p.Seleccionado))
                                         {
-                                            var marcado = item.Seleccionado;
                                             var i = indice++;
-                                            <tr class="fila-incluido @(marcado ? "seleccionada" : "")">
+                                            <tr class="fila-incluido seleccionada"
+                                                data-id="@item.IdProducto"
+                                                data-precio="@item.Precio.ToString(System.Globalization.CultureInfo.InvariantCulture)">
                                                 <td class="text-center">
-                                                    <input type="checkbox" class="form-check-input chk-incluir"
-                                                           name="Incluidos[@i].Seleccionado" value="true"
-                                                           id="chk@(item.IdProducto)" @(marcado ? "checked" : "") />
+                                                    <input type="checkbox" class="form-check-input chk-incluir" checked />
+                                                    <input type="hidden" class="sel-incluido"
+                                                           name="Incluidos[@i].Seleccionado" value="true" />
                                                 </td>
                                                 <td>
-                                                    <label for="chk@(item.IdProducto)" class="mb-0">@item.Nombre</label>
-                                                    <input type="hidden" name="Incluidos[@i].IdProducto" value="@item.IdProducto" />
+                                                    <span class="mb-0">@item.Nombre</span>
+                                                    <input type="hidden" class="id-incluido"
+                                                           name="Incluidos[@i].IdProducto" value="@item.IdProducto" />
+                                                    <input type="hidden" class="nombre-incluido"
+                                                           name="Incluidos[@i].Nombre" value="@item.Nombre" />
+                                                    <input type="hidden" class="precio-incluido"
+                                                           name="Incluidos[@i].Precio"
+                                                           value="@item.Precio.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                                                     @if (!item.Activo)
                                                     {
                                                         <span class="badge-estado inactivo ms-1">Inactivo</span>
@@ -170,10 +197,17 @@
                                                            value="@item.Cantidad" />
                                                 </td>
                                                 <td class="text-end subtotal-incluido">@MonedaHelper.FormatearBs(item.Precio * item.Cantidad)</td>
+                                                <td class="text-center">
+                                                    <button type="button" class="btn btn-sm btn-outline-danger btn-quitar"
+                                                            title="Quitar de la promoción">✕</button>
+                                                </td>
                                             </tr>
                                         }
                                     </tbody>
                                 </table>
+                                <div class="alert alert-info small mb-0 mt-2" id="sinSeleccion">
+                                    Aún no hay productos en la promoción. Escribe en el buscador para agregarlos.
+                                </div>
                             </div>
                         }
                     </div>
@@ -217,20 +251,43 @@
 
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ---------- Catálogo completo: lo usa el buscador en tiempo real ----------
+        const catalogo = @Html.Raw(catalogoJson);
+
         const fmtBs = v => 'Bs ' + Number(v || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function idsSeleccionados() {
+            return [...document.querySelectorAll('#tablaIncluidos .fila-incluido')]
+                .map(f => parseInt(f.dataset.id, 10));
+        }
+
+        // Los índices de Incluidos[n] deben ser correlativos desde 0 para que el
+        // modelo los bindee bien; los renumeramos al agregar o quitar filas.
+        function renumerar() {
+            document.querySelectorAll('#tablaIncluidos .fila-incluido').forEach((fila, k) => {
+                fila.querySelector('.sel-incluido').name = 'Incluidos[' + k + '].Seleccionado';
+                fila.querySelector('.id-incluido').name = 'Incluidos[' + k + '].IdProducto';
+                fila.querySelector('.nombre-incluido').name = 'Incluidos[' + k + '].Nombre';
+                fila.querySelector('.precio-incluido').name = 'Incluidos[' + k + '].Precio';
+                fila.querySelector('.cantidad-incluir').name = 'Incluidos[' + k + '].Cantidad';
+            });
+        }
 
         function recalcular() {
-            let suma = 0, cantidad = 0;
+            let suma = 0;
             document.querySelectorAll('#tablaIncluidos .fila-incluido').forEach(fila => {
-                const chk = fila.querySelector('.chk-incluir');
                 const cant = parseInt(fila.querySelector('.cantidad-incluir').value || '0', 10);
                 const precio = parseFloat(fila.dataset.precio || '0');
-                const subtotal = chk.checked ? (cant > 0 ? cant : 0) * precio : 0;
-                fila.classList.toggle('seleccionada', chk.checked);
+                const subtotal = (cant > 0 ? cant : 0) * precio;
                 fila.querySelector('.subtotal-incluido').textContent = fmtBs(subtotal);
                 suma += subtotal;
-                cantidad += chk.checked ? 1 : 0;
             });
+
+            const haySeleccion = document.querySelectorAll('#tablaIncluidos .fila-incluido').length > 0;
+            const sinSel = document.getElementById('sinSeleccion');
+            if (sinSel) sinSel.classList.toggle('d-none', haySeleccion);
 
             const precio = parseFloat(document.getElementById('Precio').value || '0');
             const ahorro = suma - precio;
@@ -244,30 +301,123 @@
             document.getElementById('avisoPrecio').classList.toggle('d-none', ahorro > 0 || suma === 0);
         }
 
-        document.querySelectorAll('.chk-incluir, .cantidad-incluir').forEach(el =>
-            el.addEventListener('change', recalcular));
+        function quitarFila(tr) {
+            tr.remove();
+            renumerar();
+            recalcular();
+            if (inputBuscador && inputBuscador.value.trim()) actualizarResultados();
+        }
+
+        function agregarProducto(p) {
+            const tbody = document.querySelector('#tablaIncluidos tbody');
+            if (!tbody) return;
+            const tr = document.createElement('tr');
+            tr.className = 'fila-incluido seleccionada';
+            tr.dataset.id = p.IdProducto;
+            tr.dataset.precio = p.Precio;
+            tr.innerHTML =
+                '<td class="text-center">' +
+                    '<input type="checkbox" class="form-check-input chk-incluir" checked />' +
+                    '<input type="hidden" class="sel-incluido" name="Incluidos[_].Seleccionado" value="true" />' +
+                '</td>' +
+                '<td>' +
+                    '<span class="mb-0">' + esc(p.Nombre) + (p.Activo ? '' : ' <span class="badge-estado inactivo ms-1">Inactivo</span>') + '</span>' +
+                    '<input type="hidden" class="id-incluido" name="Incluidos[_].IdProducto" value="' + p.IdProducto + '" />' +
+                    '<input type="hidden" class="nombre-incluido" name="Incluidos[_].Nombre" value="' + esc(p.Nombre) + '" />' +
+                    '<input type="hidden" class="precio-incluido" name="Incluidos[_].Precio" value="' + p.Precio + '" />' +
+                '</td>' +
+                '<td class="text-end">' + fmtBs(p.Precio) + '</td>' +
+                '<td class="text-center">' +
+                    '<input type="number" min="1" step="1" value="1" class="form-control form-control-sm cantidad-incluir" name="Incluidos[_].Cantidad" />' +
+                '</td>' +
+                '<td class="text-end subtotal-incluido">' + fmtBs(p.Precio) + '</td>' +
+                '<td class="text-center">' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger btn-quitar" title="Quitar de la promoción">✕</button>' +
+                '</td>';
+            tbody.appendChild(tr);
+            renumerar();
+            recalcular();
+            inputBuscador.value = '';
+            resultados.style.display = 'none';
+        }
+
+        const inputBuscador = document.getElementById('buscadorProductos');
+        const resultados = document.getElementById('resultadosBusqueda');
+
+        function actualizarResultados() {
+            if (!inputBuscador || !resultados) return;
+            const filtro = inputBuscador.value.trim().toLowerCase();
+            if (!filtro) { resultados.style.display = 'none'; return; }
+
+            const excluidos = new Set(idsSeleccionados());
+            const candidatos = catalogo
+                .filter(p => !excluidos.has(p.IdProducto) && p.Nombre.toLowerCase().includes(filtro))
+                .slice(0, 8);
+
+            resultados.innerHTML = '';
+            if (candidatos.length === 0) {
+                const msg = document.createElement('div');
+                msg.className = 'list-group-item text-muted';
+                msg.textContent = 'Sin resultados para "' + inputBuscador.value.trim() + '"';
+                resultados.appendChild(msg);
+            } else {
+                candidatos.forEach(p => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                    const nombre = document.createElement('span');
+                    nombre.appendChild(document.createTextNode(p.Nombre));
+                    if (!p.Activo) {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge-estado inactivo ms-1';
+                        badge.textContent = 'Inactivo';
+                        nombre.appendChild(badge);
+                    }
+                    const precio = document.createElement('span');
+                    precio.className = 'text-muted small';
+                    precio.textContent = fmtBs(p.Precio);
+                    b.appendChild(nombre);
+                    b.appendChild(precio);
+                    b.addEventListener('click', () => agregarProducto(p));
+                    resultados.appendChild(b);
+                });
+            }
+            resultados.style.display = 'block';
+        }
+
+        if (inputBuscador && resultados) {
+            inputBuscador.addEventListener('input', actualizarResultados);
+            // Un pequeño retraso en el blur para que alcance el clic del usuario
+            inputBuscador.addEventListener('blur', () => setTimeout(() => { resultados.style.display = 'none'; }, 150));
+            inputBuscador.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const primero = resultados.querySelector('.list-group-item-action');
+                    if (primero) primero.click();
+                }
+            });
+        }
+
+        // Quitar productos (botón ✕ o desmarcando la casilla)
+        const tbodyTabla = document.querySelector('#tablaIncluidos tbody');
+        if (tbodyTabla) {
+            tbodyTabla.addEventListener('click', e => {
+                const btn = e.target.closest('.btn-quitar');
+                if (btn) quitarFila(btn.closest('tr'));
+            });
+            tbodyTabla.addEventListener('change', e => {
+                if (e.target.classList.contains('chk-incluir') && !e.target.checked) {
+                    quitarFila(e.target.closest('tr'));
+                }
+            });
+            tbodyTabla.addEventListener('input', e => {
+                if (e.target.classList.contains('cantidad-incluir')) recalcular();
+            });
+        }
+
         document.getElementById('Precio').addEventListener('input', recalcular);
 
-        document.getElementById('btnTodos').addEventListener('click', () => {
-            const chks = [...document.querySelectorAll('.chk-incluir')];
-            const marcar = !chks.every(c => c.checked);
-            chks.forEach(c => c.checked = marcar);
-            recalcular();
-        });
-
-        document.getElementById('formPromocion').addEventListener('submit', () => {
-            document.querySelectorAll('#tablaIncluidos .fila-incluido').forEach(fila => {
-                const chk = fila.querySelector('.chk-incluir');
-                if (!chk.checked) chk.disabled = true;
-            });
-        });
-
-        // Precios de referencia para el cálculo del resumen
-        document.querySelectorAll('#tablaIncluidos .fila-incluido').forEach((fila, i) => {
-            const celdas = fila.querySelectorAll('td');
-            fila.dataset.precio = celdas[2].textContent.replace(/[^\d.]/g, '');
-        });
-
+        renumerar();
         recalcular();
 
         // Vista previa de la imagen elegida antes de guardar

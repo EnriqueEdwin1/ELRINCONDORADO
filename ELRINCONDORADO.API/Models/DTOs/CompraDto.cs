@@ -98,3 +98,17 @@ public class CompraItemDto
     // true si existe el movimiento ENTRADA de esta línea (motivo "COMPRA #<id>").
     public bool EntradaRegistrada { get; set; }
 }
+
+// DTO para crear compras con sus detalles
+public class CompraConDetallesDto : CompraDto
+{
+    public List<CompraDetalleRequestDto> Detalles { get; set; } = new();
+}
+
+public class CompraDetalleRequestDto
+{
+    public int IdInsumo { get; set; }
+    public decimal Cantidad { get; set; }
+    public decimal CostoUnitario { get; set; }
+    public decimal Subtotal { get; set; }
+}

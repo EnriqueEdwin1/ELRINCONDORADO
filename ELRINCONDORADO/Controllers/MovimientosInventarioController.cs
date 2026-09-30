@@ -1,20 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class MovimientosInventarioController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly MovimientosInventarioApiService _apiService;
 
-        public MovimientosInventarioController(AppDbContext context)
+        public MovimientosInventarioController(MovimientosInventarioApiService apiService)
         {
-            _context = context;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -26,189 +25,109 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: MovimientosInventario
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            // Movimientos: salidas por venta (turno actual arriba, cierres anteriores abajo),
-            // ajustes hechos al editar un insumo e ingresos al cancelar un pedido. Las compras
-            // (ENTRADA) quedan fuera a propósito: se ven en la pantalla de Compras.
-            var tiposVisibles = new[] { "VENTA", "AJUSTE", "INGRESO" };
-
-            var turnoActual = await _context.MovimientosInventario
-                .Include(m => m.Insumo)
-                .Include(m => m.Empleado)
-                .Where(m => m.IdCierre == null && tiposVisibles.Contains(m.TipoMovimiento))
-                .OrderBy(m => m.Fecha)
-                .ToListAsync();
-
-            var cierres = await _context.CierresCaja
-                .Include(c => c.Empleado)
-                .Include(c => c.Movimientos)
-                    .ThenInclude(m => m.Insumo)
-                .Include(c => c.Movimientos)
-                    .ThenInclude(m => m.Empleado)
-                .OrderByDescending(c => c.Fecha)
-                .ToListAsync();
-            foreach (var cierre in cierres)
-                cierre.Movimientos = (cierre.Movimientos ?? new List<MovimientoInventario>())
-                    .Where(m => tiposVisibles.Contains(m.TipoMovimiento))
-                    .OrderBy(m => m.Fecha).ToList();
-
-            var vm = new MovimientosAdminViewModel
+            var movimientos = await _apiService.GetAllAsync();
+            var model = new MovimientosAdminViewModel
             {
-                TurnoActual = turnoActual,
-                Cierres = cierres,
-                CantidadTurnoActual = turnoActual.Count
+                Movimientos = movimientos.ToModel()
             };
-
-            return View("~/Views/Administrador/MovimientosInventario/Index.cshtml", vm);
+            return View("~/Views/Administrador/MovimientosInventario/Index.cshtml", model);
         }
 
-        // GET: MovimientosInventario/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var movimientoInventario = await _context.MovimientosInventario
-                .Include(m => m.Insumo)
-                .Include(m => m.Empleado)
-                .FirstOrDefaultAsync(m => m.IdMovimiento == id);
-            if (movimientoInventario == null)
-            {
-                return NotFound();
-            }
+            var movimiento = await _apiService.GetByIdAsync(id.Value);
+            if (movimiento == null) return NotFound();
 
-            return View("~/Views/Administrador/MovimientosInventario/Details.cshtml", movimientoInventario);
+            var model = movimiento.ToModel();
+            return View("~/Views/Administrador/MovimientosInventario/Details.cshtml", model);
         }
 
-        // GET: MovimientosInventario/Create
-        public async Task<IActionResult> Create()
+        public IActionResult Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            await CargarListadosAsync(null,
-                new MovimientoInventario { Fecha = DateTime.Now });
-            return View("~/Views/Administrador/MovimientosInventario/Create.cshtml",
-                new MovimientoInventario { Fecha = DateTime.Now });
+            return View("~/Views/Administrador/MovimientosInventario/Create.cshtml");
         }
 
-        // POST: MovimientosInventario/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdMovimiento,IdInsumo,IdEmpleado,TipoMovimiento,Cantidad,Fecha,Motivo")] MovimientoInventario movimientoInventario)
+        public async Task<IActionResult> Create(MovimientoInventarioDto movimiento)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
-
-            await CargarListadosAsync(movimientoInventario, movimientoInventario);
 
             if (ModelState.IsValid)
             {
-                if (movimientoInventario.Cantidad <= 0)
-                {
-                    ModelState.AddModelError(string.Empty, "La cantidad debe ser mayor a 0.");
-                    return View("~/Views/Administrador/MovimientosInventario/Create.cshtml", movimientoInventario);
-                }
+                var (success, message) = await _apiService.CreateAsync(movimiento);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                _context.Add(movimientoInventario);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View("~/Views/Administrador/MovimientosInventario/Create.cshtml", movimientoInventario);
+            var model = movimiento.ToModel();
+            return View("~/Views/Administrador/MovimientosInventario/Create.cshtml", model);
         }
 
-        // GET: MovimientosInventario/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var movimientoInventario = await _context.MovimientosInventario.FindAsync(id);
-            if (movimientoInventario == null)
-            {
-                return NotFound();
-            }
+            var movimiento = await _apiService.GetByIdAsync(id.Value);
+            if (movimiento == null) return NotFound();
 
-            await CargarListadosAsync(movimientoInventario, movimientoInventario);
-            return View("~/Views/Administrador/MovimientosInventario/Edit.cshtml", movimientoInventario);
+            var model = movimiento.ToModel();
+            return View("~/Views/Administrador/MovimientosInventario/Edit.cshtml", model);
         }
 
-        // POST: MovimientosInventario/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdMovimiento,IdInsumo,IdEmpleado,TipoMovimiento,Cantidad,Fecha,Motivo")] MovimientoInventario movimientoInventario)
+        public async Task<IActionResult> Edit(int id, MovimientoInventarioDto movimiento)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != movimientoInventario.IdMovimiento)
-            {
-                return NotFound();
-            }
+            if (id != movimiento.IdMovimiento) return NotFound();
 
             if (ModelState.IsValid)
             {
-                try
-                {
-                    _context.Update(movimientoInventario);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!MovimientoInventarioExists(movimientoInventario.IdMovimiento))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                var (success, message) = await _apiService.EditAsync(id, movimiento);
+                if (success)
+                    return RedirectToAction(nameof(Index));
+
+                ModelState.AddModelError(string.Empty, message);
             }
-            await CargarListadosAsync(movimientoInventario, movimientoInventario);
-            return View("~/Views/Administrador/MovimientosInventario/Edit.cshtml", movimientoInventario);
+            var model = movimiento.ToModel();
+            return View("~/Views/Administrador/MovimientosInventario/Edit.cshtml", model);
         }
 
-        // GET: MovimientosInventario/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var movimientoInventario = await _context.MovimientosInventario
-                .Include(m => m.Insumo)
-                .Include(m => m.Empleado)
-                .FirstOrDefaultAsync(m => m.IdMovimiento == id);
-            if (movimientoInventario == null)
-            {
-                return NotFound();
-            }
+            var movimiento = await _apiService.GetByIdAsync(id.Value);
+            if (movimiento == null) return NotFound();
 
-            return View("~/Views/Administrador/MovimientosInventario/Delete.cshtml", movimientoInventario);
+            var model = movimiento.ToModel();
+            return View("~/Views/Administrador/MovimientosInventario/Delete.cshtml", model);
         }
 
-        // POST: MovimientosInventario/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -216,29 +135,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var movimientoInventario = await _context.MovimientosInventario.FindAsync(id);
-            if (movimientoInventario != null)
-            {
-                _context.MovimientosInventario.Remove(movimientoInventario);
-                await _context.SaveChangesAsync();
-            }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
+
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool MovimientoInventarioExists(int id)
-        {
-            return _context.MovimientosInventario.Any(e => e.IdMovimiento == id);
-        }
-
-        // Carga los listados de insumos y empleados para los selects de los formularios
-        private async Task CargarListadosAsync(MovimientoInventario? seleccionado, MovimientoInventario modelo)
-        {
-            ViewData["IdInsumo"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
-                await _context.Insumos.OrderBy(i => i.Nombre).ToListAsync(),
-                "IdInsumo", "Nombre", seleccionado?.IdInsumo);
-            ViewData["IdEmpleado"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
-                await _context.Empleados.OrderBy(e => e.Usuario).ToListAsync(),
-                "IdEmpleado", "Usuario", seleccionado?.IdEmpleado);
         }
     }
 }

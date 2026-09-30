@@ -1,5 +1,6 @@
 @model ELRINCONDORADO.Models.CajeroIndexViewModel
 @using ELRINCONDORADO.Models
+@using ELRINCONDORADO.Models.ApiDtos
 @using ELRINCONDORADO.Helpers
 @using System.Globalization
 @using System.Text.Json
@@ -291,7 +292,7 @@
         var categoria = categorias[i];
         var productos = categoria.Productos != null
             ? categoria.Productos.ToList()
-            : new List<Producto>();
+            : new List<ProductoDto>();
         var esPrimera = i == 0;
 
         <div class="grupo-productos" id="grupo-@categoria.IdCategoria" style="@(esPrimera ? "" : "display:none;")">
@@ -304,7 +305,7 @@
                 <div class="row g-3">
                     @foreach (var producto in productos)
                     {
-                        var nombreJs = producto.Nombre.Replace("'", "’");
+                        var nombreJs = (producto.Nombre ?? "").Replace("'", "’");
                         <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
                             <div class="producto-card">
                                 @if (!string.IsNullOrEmpty(producto.ImagenUrl))
@@ -358,18 +359,18 @@
                                 <div class="promo-desc mt-2">
                                     @(string.IsNullOrEmpty(promo.Descripcion) ? "Promoción especial del día." : promo.Descripcion)
                                 </div>
-                                @if (promo.DetallePromociones != null && promo.DetallePromociones.Count > 0)
+                                @if (promo.Incluidos != null && promo.Incluidos.Count > 0)
                                 {
                                     <div class="promo-items">
                                         <strong>Incluye:</strong>
-                                        @(string.Join(" · ", promo.DetallePromociones.Select(d => d.Producto?.Nombre + " x" + d.Cantidad).Where(n => !string.IsNullOrEmpty(n))))
+                                        @promo.ResumenProductos
                                     </div>
                                 }
                                 <div class="promo-precio">@MonedaHelper.FormatearBs(promo.Valor)</div>
-                                @if (promo.DetallePromociones != null && promo.DetallePromociones.Any(d => d.Producto != null))
+                                @if (promo.Incluidos != null && promo.Incluidos.Any(d => !string.IsNullOrEmpty(d.ProductoNombre)))
                                 {
                                     <button type="button" class="btn btn-agregar"
-                                            onclick="agregarPromocion(@promo.IdPromocion, @JsonSerializer.Serialize(promo.Nombre), @promo.Valor.ToString(CultureInfo.InvariantCulture), @JsonSerializer.Serialize(string.Join(" · ", promo.DetallePromociones.Where(d => d.Producto != null).Select(d => d.Producto!.Nombre + " x" + d.Cantidad))))">
+                                            onclick="agregarPromocion(@promo.IdPromocion, @JsonSerializer.Serialize(promo.Nombre), @promo.Valor.ToString(CultureInfo.InvariantCulture), @JsonSerializer.Serialize(promo.ResumenProductos))">
                                         Agregar promoción
                                     </button>
                                 }

@@ -54,12 +54,16 @@ public class PromocionDto
     // ACTIVA y dentro del rango de fechas. El POS (CajeroController) solo ofrece
     // las que tienen Estado == "ACTIVA"; este campo suma además el rango de fechas.
     public bool EstaActiva { get; set; }
+
+    // Productos que abarca la promoción. Se llena en AMBAS respuestas (listado y
+    // detalle) porque el listado ya trae nombre, precio y cantidad de cada uno: sin
+    // esto, el panel no puede mostrar qué contiene cada promoción.
+    public List<PromocionProductoDto> Incluidos { get; set; } = new();
 }
 
-// Detalle de una promoción, que además trae los productos incluidos.
+// El detalle comparte la forma del listado; se conserva el tipo por claridad.
 public class PromocionDetalleDto : PromocionDto
 {
-    public List<PromocionProductoDto> Incluidos { get; set; } = new();
 }
 
 // Un producto dentro de una promoción.

@@ -116,6 +116,9 @@ public class ComprasController : ControllerBase
     {
         var consulta = _db.Compras.AsNoTracking();
 
+        // Excluir compras anuladas del resumen
+        consulta = consulta.Where(c => c.Estado != "ANULADO");
+
         if (idProveedor.HasValue)
         {
             consulta = consulta.Where(c => c.IdProveedor == idProveedor.Value);

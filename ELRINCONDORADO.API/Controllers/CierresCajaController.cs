@@ -1,6 +1,7 @@
 using ELRINCONDORADO.API.Data;
 using ELRINCONDORADO.API.Data.Entities;
 using ELRINCONDORADO.API.Models.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -312,6 +313,55 @@ public class CierresCajaController : ControllerBase
     // UTC, el desfase es de horas y el turno saldra inflado; se documenta para
     // que quien lo use lo verifique contra el panel del MVC.
     private static DateTime UltimoCierreLocal(CierreCaja cierre) => cierre.Fecha;
+
+    // Crear un nuevo cierre de caja
+    // [HttpPost]
+    // [Authorize]
+    // [ProducesResponseType(typeof(CierreCajaCreateResponse), StatusCodes.Status200OK)]
+    // public async Task<ActionResult<CierreCajaCreateResponse>> Create([FromBody] CierreCajaCreateDto dto)
+    // {
+    //     var ultimoCierre = await _db.CierresCaja
+    //         .OrderByDescending(c => c.IdCierre)
+    //         .FirstOrDefaultAsync();
+
+    //     // Calcular el total de ventas del turno
+    //     var ventas = _db.Pedidos
+    //         .AsNoTracking()
+    //         .Where(p => p.EstadoPago != null && p.EstadoPago != ""
+    //                     && p.EstadoPago != "PENDIENTE"
+    //                     && p.Estado.ToUpper() != "CANCELADO");
+
+    //     var ventasTurno = await ventas
+    //         .Where(p => ultimoCierre == null || p.FechaCreacion > UltimoCierreLocal(ultimoCierre))
+    //         .Select(p => p.Total)
+    //         .ToListAsync();
+
+    //     var totalVentas = ventasTurno.Sum();
+
+    //     var cierre = new CierreCaja
+    //     {
+    //         Fecha = DateTime.UtcNow,
+    //         IdEmpleado = dto.IdEmpleado,
+    //         TotalVentas = totalVentas
+    //     };
+
+    //     _db.CierresCaja.Add(cierre);
+    //     await _db.SaveChangesAsync();
+
+    //     // Asociar los movimientos de inventario pendientes a este cierre
+    //     var movimientosPendientes = await _db.MovimientosInventario
+    //         .Where(m => m.IdCierre == null)
+    //         .ToListAsync();
+
+    //     foreach (var movimiento in movimientosPendientes)
+    //     {
+    //         movimiento.IdCierre = cierre.IdCierre;
+    //     }
+
+    //     await _db.SaveChangesAsync();
+
+    //     return Ok(new CierreCajaCreateResponse { mensaje = "Cierre de caja creado exitosamente.", id = cierre.IdCierre });
+    // }
 }
 
 // Envoltura de paginación del listado de cierres.

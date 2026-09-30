@@ -100,7 +100,6 @@
                                     title="Quitar selección" aria-label="Quitar selección">✕</button>
                             <div id="resultadoBusqueda" class="buscador-resultados d-none"></div>
                         </div>
-                        <button type="button" id="btnAnadirCompra" class="btn btn-modulo">Añadir</button>
                     </div>
 
                     <small class="text-danger d-none" id="errorAgregar"></small>
@@ -236,6 +235,7 @@
                 $(fila).find('.f-IdInsumo').attr('name', 'Detalles[' + i + '].IdInsumo');
                 $(fila).find('.f-Cantidad').attr('name', 'Detalles[' + i + '].Cantidad');
                 $(fila).find('.f-Costo').attr('name', 'Detalles[' + i + '].CostoUnitario');
+                $(fila).find('.f-Subtotal').attr('name', 'Detalles[' + i + '].Subtotal');
             });
         }
 
@@ -247,6 +247,7 @@
                 var linea = cantidad * costo;
                 subtotal += linea;
                 $(this).find('.subtotal-linea').text('Bs ' + linea.toFixed(2));
+                $(this).find('.f-Subtotal').val(linea.toFixed(2));
             });
             var descuento = parseFloat($('input[name="Descuento"]').val()) || 0;
             var total = Math.max(subtotal - descuento, 0);
@@ -259,11 +260,22 @@
         }
 
         function seleccionarInsumo(insumo) {
-            insumoSeleccionado = insumo;
-            $('#buscarInsumoCompra').val(insumo.Nombre);
-            $('#resultadoBusqueda').addClass('d-none').empty();
+            var id = insumo.IdInsumo;
+            var yaExiste = false;
+            $('#tablaDetalles tbody tr .f-IdInsumo').each(function () {
+                if (parseInt(this.value) === id) yaExiste = true;
+            });
+            if (yaExiste) {
+                $('#errorAgregar').removeClass('d-none').text(insumo.Nombre + ' ya está en la lista.');
+                return;
+            }
             $('#errorAgregar').addClass('d-none');
-            $('#btnLimpiarSeleccion').removeClass('d-none');
+            agregarFila(insumo);
+            insumoSeleccionado = null;
+            $('#buscarInsumoCompra').val('');
+            $('#btnLimpiarSeleccion').addClass('d-none');
+            $('#resultadoBusqueda').addClass('d-none').empty();
+            $('#buscarInsumoCompra').focus();
         }
 
         function agregarFila(insumo) {
@@ -272,7 +284,7 @@
                 '<span class="fw-semibold">' + insumo.Nombre + '</span></td>' +
                 '<td><input type="number" class="form-control f-Cantidad" min="0" step="any" value="1" placeholder="0" required /></td>' +
                 '<td><input type="number" class="form-control f-Costo" min="0.01" step="0.01" value="' + insumo.CostoUnitario + '" placeholder="0" required /></td>' +
-                '<td class="subtotal-linea text-end fw-semibold">Bs 0.00</td>' +
+                '<td class="subtotal-linea text-end fw-semibold">Bs 0.00<input type="hidden" class="f-Subtotal" value="0" /></td>' +
                 '<td><button type="button" class="btn btn-sm btn-eliminar btn-quitar">✕</button></td>' +
                 '</tr>';
             $('#tablaDetalles tbody').append(fila);
@@ -292,9 +304,20 @@
                 cont.addClass('d-none');
                 return;
             }
+
+            // Obtener IDs de insumos ya seleccionados en la tabla
+            var idsSeleccionados = [];
+            $('#tablaDetalles tbody tr .f-IdInsumo').each(function () {
+                var id = parseInt(this.value);
+                if (id) idsSeleccionados.push(id);
+            });
+
             var matches = insumos.filter(function (i) {
+                // Excluir insumos ya seleccionados
+                if (idsSeleccionados.indexOf(i.IdInsumo) !== -1) return false;
                 return i.Nombre.toLowerCase().indexOf(term) !== -1;
             });
+
             if (matches.length === 0) {
                 cont.append('<div class="item-resultado text-muted">Sin resultados</div>');
             } else {
@@ -314,21 +337,7 @@
                 msj.removeClass('d-none').text('Busca y selecciona un insumo antes de añadirlo.');
                 return;
             }
-            var id = insumoSeleccionado.IdInsumo;
-            var yaExiste = false;
-            $('#tablaDetalles tbody tr .f-IdInsumo').each(function () {
-                if (parseInt(this.value) === id) yaExiste = true;
-            });
-            if (yaExiste) {
-                msj.removeClass('d-none').text(insumoSeleccionado.Nombre + ' ya está en la lista.');
-                return;
-            }
-            msj.addClass('d-none');
-            agregarFila(insumoSeleccionado);
-            insumoSeleccionado = null;
-            $('#buscarInsumoCompra').val('');
-            $('#btnLimpiarSeleccion').addClass('d-none');
-            $('#buscarInsumoCompra').focus();
+            seleccionarInsumo(insumoSeleccionado);
         });
 
         $('#btnLimpiarSeleccion').on('click', function () {

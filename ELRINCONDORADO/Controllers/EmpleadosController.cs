@@ -1,22 +1,22 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
-using System.Security.Cryptography;
-using System.Text;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class EmpleadosController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly EmpleadosApiService _apiService;
+        private readonly RolesApiService _rolesApiService;
 
-        public EmpleadosController(AppDbContext context)
+        public EmpleadosController(EmpleadosApiService apiService, RolesApiService rolesApiService)
         {
-            _context = context;
+            _apiService = apiService;
+            _rolesApiService = rolesApiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -28,215 +28,120 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: Empleados
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var empleados = _context.Empleados.Include(e => e.Rol);
-            return View("~/Views/Administrador/Empleados/Index.cshtml", await empleados.ToListAsync());
+            var empleados = await _apiService.GetAllAsync();
+            var model = empleados.ToModel();
+            return View("~/Views/Administrador/Empleados/Index.cshtml", model);
         }
 
-        // GET: Empleados/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var empleado = await _context.Empleados
-                .Include(e => e.Rol)
-                .FirstOrDefaultAsync(m => m.IdEmpleado == id);
-            if (empleado == null)
-            {
-                return NotFound();
-            }
+            var empleado = await _apiService.GetByIdAsync(id.Value);
+            if (empleado == null) return NotFound();
 
-            return View("~/Views/Administrador/Empleados/Details.cshtml", empleado);
+            var model = empleado.ToModel();
+            return View("~/Views/Administrador/Empleados/Details.cshtml", model);
         }
 
-        // GET: Empleados/Create
-        public IActionResult Create()
+        public async Task<IActionResult> Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            CargarRoles();
+            var roles = await _rolesApiService.GetAllAsync();
+            ViewBag.IdRol = new SelectList(roles, "IdRol", "Nombre");
+
             return View("~/Views/Administrador/Empleados/Create.cshtml");
         }
 
-        // POST: Empleados/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdEmpleado,IdRol,Nombre,Apellido,Usuario,PasswordHash,Telefono,FechaContratacion,Estado")] Empleado empleado)
+        public async Task<IActionResult> Create(EmpleadoDto empleado)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
             if (ModelState.IsValid)
             {
-                var rolNombre = await _context.Roles
-                    .Where(r => r.IdRol == empleado.IdRol)
-                    .Select(r => r.Nombre)
-                    .FirstOrDefaultAsync();
+                var (success, message) = await _apiService.CreateAsync(empleado);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                if (rolNombre == "ADMINISTRADOR")
-                {
-                    ModelState.AddModelError(string.Empty, "Un administrador no puede crear otro usuario con rol administrador.");
-                    CargarRoles(empleado.IdRol);
-                    return View("~/Views/Administrador/Empleados/Create.cshtml", empleado);
-                }
-
-                if (await _context.Empleados.AnyAsync(e => e.Usuario == empleado.Usuario))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese nombre de usuario ya está en uso.");
-                    CargarRoles(empleado.IdRol);
-                    return View("~/Views/Administrador/Empleados/Create.cshtml", empleado);
-                }
-
-                if (!string.IsNullOrWhiteSpace(empleado.PasswordHash))
-                    empleado.PasswordHash = HashPassword(empleado.PasswordHash);
-
-                _context.Add(empleado);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-            CargarRoles(empleado.IdRol);
-            return View("~/Views/Administrador/Empleados/Create.cshtml", empleado);
+
+            var roles = await _rolesApiService.GetAllAsync();
+            ViewBag.IdRol = new SelectList(roles, "IdRol", "Nombre");
+
+            var model = empleado.ToModel();
+            return View("~/Views/Administrador/Empleados/Create.cshtml", model);
         }
 
-        // GET: Empleados/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var empleado = await _context.Empleados
-                .Include(e => e.Rol)
-                .FirstOrDefaultAsync(e => e.IdEmpleado == id);
-            if (empleado == null)
-            {
-                return NotFound();
-            }
-            CargarRoles(empleado.IdRol);
-            ViewBag.EsAdministrador = empleado.Rol?.Nombre == "ADMINISTRADOR";
-            return View("~/Views/Administrador/Empleados/Edit.cshtml", empleado);
+            var empleado = await _apiService.GetByIdAsync(id.Value);
+            if (empleado == null) return NotFound();
+
+            var roles = await _rolesApiService.GetAllAsync();
+            ViewBag.IdRol = new SelectList(roles, "IdRol", "Nombre");
+
+            var model = empleado.ToModel();
+            return View("~/Views/Administrador/Empleados/Edit.cshtml", model);
         }
 
-        // POST: Empleados/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdEmpleado,IdRol,Nombre,Apellido,Usuario,PasswordHash,Telefono,FechaContratacion,Estado")] Empleado empleado, string? nuevaPassword)
+        public async Task<IActionResult> Edit(int id, EmpleadoDto empleado)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != empleado.IdEmpleado)
-            {
-                return NotFound();
-            }
+            if (id != empleado.IdEmpleado) return NotFound();
 
             if (ModelState.IsValid)
             {
-                if (await _context.Empleados.AnyAsync(e => e.Usuario == empleado.Usuario && e.IdEmpleado != empleado.IdEmpleado))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese nombre de usuario ya está en uso.");
-                    CargarRoles(empleado.IdRol);
-                    return View("~/Views/Administrador/Empleados/Edit.cshtml", empleado);
-                }
+                var (success, message) = await _apiService.EditAsync(id, empleado);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                var original = await _context.Empleados
-                    .Include(e => e.Rol)
-                    .FirstOrDefaultAsync(e => e.IdEmpleado == id);
-                if (original == null)
-                {
-                    return NotFound();
-                }
-
-                var esOriginalAdmin = original.Rol?.Nombre == "ADMINISTRADOR";
-                var nuevoRolEsAdmin = await _context.Roles
-                    .AnyAsync(r => r.IdRol == empleado.IdRol && r.Nombre == "ADMINISTRADOR");
-
-                if (nuevoRolEsAdmin && !esOriginalAdmin)
-                {
-                    ModelState.AddModelError(string.Empty, "Un administrador no puede otorgar el rol administrador a otro empleado.");
-                    CargarRoles(empleado.IdRol);
-                    return View("~/Views/Administrador/Empleados/Edit.cshtml", empleado);
-                }
-
-                if (esOriginalAdmin)
-                {
-                    // A un administrador solo se le permite modificar su teléfono
-                    original.Telefono = empleado.Telefono;
-                }
-                else
-                {
-                    original.IdRol = empleado.IdRol;
-                    original.Nombre = empleado.Nombre;
-                    original.Apellido = empleado.Apellido;
-                    original.Usuario = empleado.Usuario;
-                    original.Telefono = empleado.Telefono;
-                    original.FechaContratacion = empleado.FechaContratacion;
-                    original.Estado = empleado.Estado;
-                }
-
-                if (!string.IsNullOrWhiteSpace(nuevaPassword))
-                    original.PasswordHash = HashPassword(nuevaPassword);
-
-                try
-                {
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!EmpleadoExists(empleado.IdEmpleado))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-            CargarRoles(empleado.IdRol);
-            return View("~/Views/Administrador/Empleados/Edit.cshtml", empleado);
+
+            var roles = await _rolesApiService.GetAllAsync();
+            ViewBag.IdRol = new SelectList(roles, "IdRol", "Nombre");
+
+            var model = empleado.ToModel();
+            return View("~/Views/Administrador/Empleados/Edit.cshtml", model);
         }
 
-        // GET: Empleados/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var empleado = await _context.Empleados
-                .Include(e => e.Rol)
-                .FirstOrDefaultAsync(m => m.IdEmpleado == id);
-            if (empleado == null)
-            {
-                return NotFound();
-            }
+            var empleado = await _apiService.GetByIdAsync(id.Value);
+            if (empleado == null) return NotFound();
 
-            return View("~/Views/Administrador/Empleados/Delete.cshtml", empleado);
+            var model = empleado.ToModel();
+            return View("~/Views/Administrador/Empleados/Delete.cshtml", model);
         }
 
-        // POST: Empleados/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -244,51 +149,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var empleado = await _context.Empleados
-                .Include(e => e.Rol)
-                .FirstOrDefaultAsync(e => e.IdEmpleado == id);
-            if (empleado != null)
-            {
-                if (empleado.Rol?.Nombre == "ADMINISTRADOR")
-                {
-                    TempData["Error"] = "No puedes eliminar a un usuario administrador.";
-                    return RedirectToAction(nameof(Index));
-                }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-                var tieneRegistros = await _context.Pedidos.AnyAsync(p => p.IdEmpleado == id)
-                    || await _context.Compras.AnyAsync(c => c.IdEmpleado == id)
-                    || await _context.MovimientosInventario.AnyAsync(m => m.IdEmpleado == id);
-
-                if (tieneRegistros)
-                {
-                    TempData["Error"] = "No se puede eliminar el empleado porque tiene ventas, pedidos, compras o movimientos asociados.";
-                    return RedirectToAction(nameof(Index));
-                }
-
-                _context.Empleados.Remove(empleado);
-                await _context.SaveChangesAsync();
-            }
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool EmpleadoExists(int id)
-        {
-            return _context.Empleados.Any(e => e.IdEmpleado == id);
-        }
-
-        // Carga el listado de roles excluyendo al administrador (no se puede crear/grantar ese rol)
-        private void CargarRoles(int? idRol = null)
-        {
-            var roles = _context.Roles
-                .Where(r => r.Nombre != "ADMINISTRADOR")
-                .OrderBy(r => r.Nombre)
-                .ToList();
-            ViewBag.IdRol = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(roles, "IdRol", "Nombre", idRol);
-        }
-
-        private static string HashPassword(string password)
-        {
-            return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(password)));
         }
     }
 }

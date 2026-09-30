@@ -46,9 +46,8 @@
 
                 <div class="form-group mb-3">
                     <label class="form-label">Producto</label>
-                    <select asp-for="IdProducto" class="form-control" asp-items="ViewBag.IdProducto" required>
-                        <option value="">Seleccionar producto...</option>
-                    </select>
+                    <input type="text" class="form-control" value="@(ViewBag.ProductoActual ?? Model.ProductoNombre)" disabled />
+                    <input type="hidden" asp-for="IdProducto" />
                 </div>
 
                 <div class="form-group mb-3">

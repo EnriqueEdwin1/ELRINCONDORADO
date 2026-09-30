@@ -1,8 +1,5 @@
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication;
-using System.Security.Claims;
 
 namespace ELRINCONDORADO.Services.Api
 {
@@ -66,25 +63,6 @@ namespace ELRINCONDORADO.Services.Api
                     httpContext.Session.SetString("Usuario", loginResponse.Usuario);
                     httpContext.Session.SetString("Nombre", $"{loginResponse.Nombre} {loginResponse.Apellido}");
                     httpContext.Session.SetString("Rol", loginResponse.Rol);
-
-                    // Crear claims para autenticación de cookies
-                    var claims = new List<Claim>
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, loginResponse.IdEmpleado.ToString()),
-                        new Claim(ClaimTypes.Name, loginResponse.Usuario),
-                        new Claim(ClaimTypes.Role, loginResponse.Rol),
-                        new Claim("nombre_completo", $"{loginResponse.Nombre} {loginResponse.Apellido}")
-                    };
-
-                    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                    var authProperties = new AuthenticationProperties
-                    {
-                        IsPersistent = true,
-                        ExpiresUtc = DateTimeOffset.UtcNow.AddHours(loginResponse.ExpiraEnHoras)
-                    };
-
-                    await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, 
-                        new ClaimsPrincipal(claimsIdentity), authProperties);
                 }
 
                 return true;
@@ -107,7 +85,6 @@ namespace ELRINCONDORADO.Services.Api
             var httpContext = _httpContextAccessor.HttpContext;
             if (httpContext != null)
             {
-                await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                 httpContext.Session.Clear();
             }
         }

@@ -1,23 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
-using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Services.Api;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class RolesController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly RolesApiService _apiService;
 
-        public RolesController(AppDbContext context)
+        public RolesController(RolesApiService apiService)
         {
-            _context = context;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR.
-        // Este controller se generó por scaffolding y estaba SIN ninguna validación:
-        // sin ella, cualquier visita anonima podía crear o BORRAR roles. Sin vistas
-        // que lo enlacen, el GET fallaba, pero los POST sí se ejecutaban.
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -29,139 +24,100 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: Roles
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View(await _context.Roles.ToListAsync());
+            var roles = await _apiService.GetAllAsync();
+            return View("~/Views/Administrador/Roles/Index.cshtml", roles);
         }
 
-        // GET: Roles/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var rol = await _context.Roles
-                .FirstOrDefaultAsync(m => m.IdRol == id);
-            if (rol == null)
-            {
-                return NotFound();
-            }
+            var rol = await _apiService.GetByIdAsync(id.Value);
+            if (rol == null) return NotFound();
 
-            return View(rol);
+            return View("~/Views/Administrador/Roles/Details.cshtml", rol);
         }
 
-        // GET: Roles/Create
         public IActionResult Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View();
+            return View("~/Views/Administrador/Roles/Create.cshtml");
         }
 
-        // POST: Roles/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdRol,Nombre,Descripcion")] Rol rol)
+        public async Task<IActionResult> Create(RolDto rol)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
             if (ModelState.IsValid)
             {
-                _context.Add(rol);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                var (success, message) = await _apiService.CreateAsync(rol);
+                if (success)
+                    return RedirectToAction(nameof(Index));
+
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View(rol);
+            return View("~/Views/Administrador/Roles/Create.cshtml", rol);
         }
 
-        // GET: Roles/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var rol = await _context.Roles.FindAsync(id);
-            if (rol == null)
-            {
-                return NotFound();
-            }
-            return View(rol);
+            var rol = await _apiService.GetByIdAsync(id.Value);
+            if (rol == null) return NotFound();
+
+            return View("~/Views/Administrador/Roles/Edit.cshtml", rol);
         }
 
-        // POST: Roles/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdRol,Nombre,Descripcion")] Rol rol)
+        public async Task<IActionResult> Edit(int id, RolDto rol)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != rol.IdRol)
-            {
-                return NotFound();
-            }
+            if (id != rol.IdRol) return NotFound();
 
             if (ModelState.IsValid)
             {
-                try
-                {
-                    _context.Update(rol);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!RolExists(rol.IdRol))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                var (success, message) = await _apiService.EditAsync(id, rol);
+                if (success)
+                    return RedirectToAction(nameof(Index));
+
+                ModelState.AddModelError(string.Empty, message);
             }
-            return View(rol);
+            return View("~/Views/Administrador/Roles/Edit.cshtml", rol);
         }
 
-        // GET: Roles/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var rol = await _context.Roles
-                .FirstOrDefaultAsync(m => m.IdRol == id);
-            if (rol == null)
-            {
-                return NotFound();
-            }
+            var rol = await _apiService.GetByIdAsync(id.Value);
+            if (rol == null) return NotFound();
 
-            return View(rol);
+            return View("~/Views/Administrador/Roles/Delete.cshtml", rol);
         }
 
-        // POST: Roles/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -169,18 +125,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var rol = await _context.Roles.FindAsync(id);
-            if (rol != null)
-            {
-                _context.Roles.Remove(rol);
-                await _context.SaveChangesAsync();
-            }
-            return RedirectToAction(nameof(Index));
-        }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-        private bool RolExists(int id)
-        {
-            return _context.Roles.Any(e => e.IdRol == id);
+            return RedirectToAction(nameof(Index));
         }
     }
 }

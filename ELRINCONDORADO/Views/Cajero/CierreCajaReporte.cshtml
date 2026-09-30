@@ -86,7 +86,7 @@
             <div class="titulos">
                 <div class="tienda">EL RINCÓN DORADO</div>
                 <div class="tipo">REPORTE DE CIERRE DE CAJA</div>
-                <div class="datos">Cajero: @Model.Cajero &nbsp;|&nbsp; Fecha: @Model.Fecha.ToString("dd/MM/yyyy HH:mm")</div>
+                <div class="datos">Cajero: @Model.Cajero &nbsp;|&nbsp; Fecha: @(Model.Fecha?.ToString("dd/MM/yyyy HH:mm") ?? "N/A")</div>
             </div>
         </div>
 

@@ -1,0 +1,93 @@
+@model IEnumerable<ELRINCONDORADO.Models.ApiDtos.CierreCajaDto>
+@{
+    ViewData["Title"] = "Cierres de Caja";
+    Layout = null;
+    var nombre = Context.Session.GetString("Nombre");
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="~/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/administrador.css" rel="stylesheet" />
+    <link href="~/css/marca.css" rel="stylesheet" />
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/Administrador"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span></a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <span class="text-white">@nombre</span>
+                <form method="post" action="/Auth/Logout" style="display: inline;">
+                    <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>🧾 Cierres de Caja</h2>
+            <a href="/Administrador" class="btn btn-secondary">← Volver</a>
+        </div>
+
+        @if (TempData["Exito"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                @TempData["Exito"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+
+        @if (Model == null || !Model.Any())
+        {
+            <div class="alert alert-info">
+                No hay cierres de caja registrados.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha</th>
+                            <th>Empleado</th>
+                            <th>Total Ventas</th>
+                            <th>Movimientos Cerrados</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cierre in Model)
+                        {
+                            <tr>
+                                <td>@cierre.IdCierre</td>
+                                <td>@cierre.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@cierre.EmpleadoNombre</td>
+                                <td>@((cierre.TotalVentas ?? 0).ToString("C2"))</td>
+                                <td>@cierre.MovimientosCerrados</td>
+                                <td>
+                                    <a href="/CierresCaja/Details/@cierre.IdCierre" class="btn btn-sm btn-info">Ver detalle</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

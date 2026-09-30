@@ -1,22 +1,25 @@
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Models.ApiDtos;
+using System.Linq;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class RecetasController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly RecetasApiService _apiService;
+        private readonly InsumosApiService _insumosApiService;
+        private readonly ProductosApiService _productosApiService;
 
-        public RecetasController(AppDbContext context)
+        public RecetasController(RecetasApiService apiService, InsumosApiService insumosApiService, ProductosApiService productosApiService)
         {
-            _context = context;
+            _apiService = apiService;
+            _insumosApiService = insumosApiService;
+            _productosApiService = productosApiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -28,235 +31,146 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: Recetas
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var recetas = await _context.Recetas
-                .Include(r => r.Producto)
-                .Include(r => r.DetalleRecetas)
-                .OrderBy(r => r.Producto != null ? r.Producto.Nombre : string.Empty)
-                .ToListAsync();
-
-            return View("~/Views/Administrador/Recetas/Index.cshtml", recetas);
+            var recetas = await _apiService.GetAllAsync();
+            var model = recetas.ToModel();
+            return View("~/Views/Administrador/Recetas/Index.cshtml", model);
         }
 
-        // GET: Recetas/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var receta = await _context.Recetas
-                .Include(r => r.Producto)
-                .Include(r => r.DetalleRecetas)
-                    .ThenInclude(d => d.Insumo)
-                .FirstOrDefaultAsync(m => m.IdReceta == id);
-            if (receta == null)
-            {
-                return NotFound();
-            }
+            var receta = await _apiService.GetByIdAsync(id.Value);
+            if (receta == null) return NotFound();
 
-            return View("~/Views/Administrador/Recetas/Details.cshtml", receta);
+            var model = receta.ToModel();
+            return View("~/Views/Administrador/Recetas/Details.cshtml", model);
         }
 
-        // GET: Recetas/Create
-        public IActionResult Create(int? idProducto = null)
+        public async Task<IActionResult> Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            CargarListas(idProducto);
-            return View("~/Views/Administrador/Recetas/Create.cshtml", new RecetaViewModel { IdProducto = idProducto ?? 0 });
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
+            {
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
+
+            // Solo mostrar productos que NO tienen receta
+            var productos = await _productosApiService.GetAllAsync();
+            var productosSinReceta = productos?.Where(p => !p.TieneReceta).ToList() ?? new List<ProductoDto>();
+            ViewBag.IdProducto = new SelectList(productosSinReceta, "IdProducto", "Nombre");
+
+            return View("~/Views/Administrador/Recetas/Create.cshtml", new RecetaViewModel());
         }
 
-        // POST: Recetas/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(RecetaViewModel modelo)
+        public async Task<IActionResult> Create(RecetaDto receta)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
-
-            var detallesValidos = modelo.Detalles
-                ?.Where(d => d.IdInsumo > 0 && d.Cantidad > 0)
-                .ToList() ?? new List<DetalleRecetaViewModel>();
-
-            if (detallesValidos.Count == 0)
-            {
-                ModelState.AddModelError(string.Empty, "Agrega al menos un insumo con cantidad mayor a cero.");
-            }
 
             if (ModelState.IsValid)
             {
-                var receta = new Receta
-                {
-                    IdProducto = modelo.IdProducto,
-                    Descripcion = modelo.Descripcion,
-                    Activo = modelo.Activo
-                };
+                var (success, message) = await _apiService.CreateAsync(receta);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                _context.Recetas.Add(receta);
-                await _context.SaveChangesAsync();
-
-                foreach (var detalle in detallesValidos)
-                {
-                    var insumo = await _context.Insumos.FindAsync(detalle.IdInsumo);
-                    if (insumo == null)
-                        continue;
-
-                    _context.DetalleRecetas.Add(new DetalleReceta
-                    {
-                        IdReceta = receta.IdReceta,
-                        IdInsumo = detalle.IdInsumo,
-                        Cantidad = detalle.Cantidad,
-                        UnidadMedida = detalle.UnidadMedida ?? insumo.UnidadMedida
-                    });
-                }
-
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-
-            CargarListas(modelo.IdProducto);
-            return View("~/Views/Administrador/Recetas/Create.cshtml", modelo);
+            var model = receta.ToViewModel();
+            return View("~/Views/Administrador/Recetas/Create.cshtml", model);
         }
 
-        // GET: Recetas/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var receta = await _context.Recetas
-                .Include(r => r.Producto)
-                .Include(r => r.DetalleRecetas)
-                    .ThenInclude(d => d.Insumo)
-                .FirstOrDefaultAsync(m => m.IdReceta == id);
-            if (receta == null)
-            {
-                return NotFound();
-            }
+            var receta = await _apiService.GetByIdAsync(id.Value);
+            if (receta == null) return NotFound();
 
-            var modelo = new RecetaViewModel
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
             {
-                IdReceta = receta.IdReceta,
-                IdProducto = receta.IdProducto,
-                Descripcion = receta.Descripcion,
-                Activo = receta.Activo,
-                Detalles = receta.DetalleRecetas?
-                    .Select(d => new DetalleRecetaViewModel
-                    {
-                        IdDetalleReceta = d.IdDetalleReceta,
-                        IdInsumo = d.IdInsumo,
-                        Cantidad = d.Cantidad,
-                        UnidadMedida = d.UnidadMedida
-                    })
-                    .ToList() ?? new List<DetalleRecetaViewModel>()
-            };
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
 
-            CargarListas(modelo.IdProducto);
-            return View("~/Views/Administrador/Recetas/Edit.cshtml", modelo);
+            // Pasar el producto actual para mostrarlo como solo lectura
+            ViewBag.ProductoActual = receta.ProductoNombre;
+
+            var model = receta.ToViewModel();
+            return View("~/Views/Administrador/Recetas/Edit.cshtml", model);
         }
 
-        // POST: Recetas/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, RecetaViewModel modelo)
+        public async Task<IActionResult> Edit(int id, RecetaDto receta)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != modelo.IdReceta)
-            {
-                return NotFound();
-            }
-
-            var detallesValidos = modelo.Detalles
-                ?.Where(d => d.IdInsumo > 0 && d.Cantidad > 0)
-                .ToList() ?? new List<DetalleRecetaViewModel>();
-
-            if (detallesValidos.Count == 0)
-            {
-                ModelState.AddModelError(string.Empty, "Agrega al menos un insumo con cantidad mayor a cero.");
-            }
+            if (id != receta.IdReceta) return NotFound();
 
             if (ModelState.IsValid)
             {
-                var receta = await _context.Recetas
-                    .Include(r => r.DetalleRecetas)
-                    .FirstOrDefaultAsync(r => r.IdReceta == id);
-                if (receta == null)
-                {
-                    return NotFound();
-                }
+                var (success, message) = await _apiService.EditAsync(id, receta);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                receta.IdProducto = modelo.IdProducto;
-                receta.Descripcion = modelo.Descripcion;
-                receta.Activo = modelo.Activo;
-
-                // Reemplazar detalles
-                _context.DetalleRecetas.RemoveRange(receta.DetalleRecetas ?? new List<DetalleReceta>());
-                foreach (var detalle in detallesValidos)
-                {
-                    var insumo = await _context.Insumos.FindAsync(detalle.IdInsumo);
-                    if (insumo == null)
-                        continue;
-
-                    _context.DetalleRecetas.Add(new DetalleReceta
-                    {
-                        IdReceta = receta.IdReceta,
-                        IdInsumo = detalle.IdInsumo,
-                        Cantidad = detalle.Cantidad,
-                        UnidadMedida = detalle.UnidadMedida ?? insumo.UnidadMedida
-                    });
-                }
-
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
-
-            CargarListas(modelo.IdProducto);
-            return View("~/Views/Administrador/Recetas/Edit.cshtml", modelo);
+            var model = receta.ToViewModel();
+            return View("~/Views/Administrador/Recetas/Edit.cshtml", model);
         }
 
-        // GET: Recetas/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var receta = await _context.Recetas
-                .Include(r => r.Producto)
-                .Include(r => r.DetalleRecetas)
-                    .ThenInclude(d => d.Insumo)
-                .FirstOrDefaultAsync(m => m.IdReceta == id);
-            if (receta == null)
-            {
-                return NotFound();
-            }
+            var receta = await _apiService.GetByIdAsync(id.Value);
+            if (receta == null) return NotFound();
 
-            return View("~/Views/Administrador/Recetas/Delete.cshtml", receta);
+            var model = receta.ToModel();
+            return View("~/Views/Administrador/Recetas/Delete.cshtml", model);
         }
 
-        // POST: Recetas/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -264,29 +178,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var receta = await _context.Recetas
-                .Include(r => r.DetalleRecetas)
-                .FirstOrDefaultAsync(r => r.IdReceta == id);
-            if (receta != null)
-            {
-                _context.DetalleRecetas.RemoveRange(receta.DetalleRecetas ?? new List<DetalleReceta>());
-                _context.Recetas.Remove(receta);
-                await _context.SaveChangesAsync();
-            }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool RecetaExists(int id)
-        {
-            return _context.Recetas.Any(e => e.IdReceta == id);
-        }
-
-        private void CargarListas(int? idProducto = null)
-        {
-            ViewData["IdProducto"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
-                _context.Productos.Where(p => p.Activo).ToList(), "IdProducto", "Nombre", idProducto);
-            ViewBag.Insumos = _context.Insumos.Where(i => i.Activo).OrderBy(i => i.Nombre).ToList();
         }
     }
 }

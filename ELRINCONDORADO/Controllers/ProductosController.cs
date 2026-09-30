@@ -1,23 +1,50 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
-using ELRINCONDORADO.Helpers;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Models.ApiDtos;
+using ELRINCONDORADO.Helpers;
 
 namespace ELRINCONDORADO.Controllers
 {
-    public class ProductosController : Controller
+    public partial class ProductosController : Controller
     {
-        private readonly AppDbContext _context;
-        private readonly string? _imgbbApiKey;
+        private readonly ProductosApiService _apiService;
+        private readonly CategoriasApiService _categoriasApiService;
+        private readonly PromocionesApiService _promocionesApiService;
+        private readonly InsumosApiService _insumosApiService;
+        private readonly IConfiguration _configuration;
 
-        public ProductosController(AppDbContext context, IConfiguration configuration)
+        public ProductosController(
+            ProductosApiService apiService,
+            CategoriasApiService categoriasApiService,
+            PromocionesApiService promocionesApiService,
+            InsumosApiService insumosApiService,
+            IConfiguration configuration)
         {
-            _context = context;
-            _imgbbApiKey = configuration["ImgBB:ApiKey"];
+            _apiService = apiService;
+            _categoriasApiService = categoriasApiService;
+            _promocionesApiService = promocionesApiService;
+            _insumosApiService = insumosApiService;
+            _configuration = configuration;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
+        // Sube la imagen a ImgBB si el formulario trae un archivo. Acepta
+        // cualquier formato: el helper detecta el tipo real del archivo.
+        // Devuelve (true, resultado, null) con la subida hecha, (true, null, null)
+        // cuando no viene archivo, y (false, null, mensajeError) si falló.
+        private async Task<(bool ok, ImgbbResult? resultado, string? error)> SubirImagenSiViene(IFormFile? imagenFile)
+        {
+            if (imagenFile == null || imagenFile.Length == 0)
+                return (true, null, null);
+
+            var resultado = await ImgbbHelper.SubirImagenAsync(imagenFile, _configuration["Imgbb:ApiKey"]);
+            if (!resultado.Exitoso)
+                return (false, null, resultado.Error ?? "No se pudo subir la imagen a ImgBB.");
+
+            return (true, resultado, null);
+        }
+
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -29,817 +56,265 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        private void CargarListas(int? idCategoria = null)
-        {
-            ViewBag.IdCategoria = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(
-                _context.Categorias.OrderBy(c => c.Nombre).ToList(), "IdCategoria", "Nombre", idCategoria);
-            ViewBag.Insumos = _context.Insumos.Where(i => i.Activo).OrderBy(i => i.Nombre).ToList();
-        }
-
-        private List<DetalleRecetaViewModel> ObtenerDetallesValidos(List<DetalleRecetaViewModel>? detalles)
-        {
-            return detalles
-                ?.Where(d => d.IdInsumo > 0 && d.Cantidad > 0)
-                .ToList() ?? new List<DetalleRecetaViewModel>();
-        }
-
-        private const string VistaProductos = "~/Views/Administrador/Productos/Index.cshtml";
-        private const string VistaDetails = "~/Views/Administrador/Productos/Details.cshtml";
-        private const string VistaCreate = "~/Views/Administrador/Productos/Create.cshtml";
-        private const string VistaEdit = "~/Views/Administrador/Productos/Edit.cshtml";
-        private const string VistaDelete = "~/Views/Administrador/Productos/Delete.cshtml";
-        private const string VistaPromocionForm = "~/Views/Administrador/Productos/PromocionForm.cshtml";
-        private const string VistaPromocionDetails = "~/Views/Administrador/Productos/PromocionDetails.cshtml";
-        private const string VistaPromocionDelete = "~/Views/Administrador/Productos/PromocionDelete.cshtml";
-
-        // ===== PROMOCIONES =====
-
-        // Productos que se pueden incluir en una promoción: cualquier producto del catálogo
-        private async Task<List<ProductoPromocionItem>> ObtenerCandidatosAsync()
-        {
-            return await _context.Productos
-                .OrderBy(p => p.Nombre)
-                .Select(p => new ProductoPromocionItem
-                {
-                    IdProducto = p.IdProducto,
-                    Nombre = p.Nombre,
-                    Precio = p.Precio,
-                    Activo = p.Activo,
-                    Cantidad = 1
-                })
-                .ToListAsync();
-        }
-
-        private async Task<PromocionFormViewModel> ConstruirFormularioPromocionAsync(Promocion? promocion)
-        {
-            var modelo = new PromocionFormViewModel();
-            if (promocion != null)
-            {
-                modelo.IdPromocion = promocion.IdPromocion;
-                modelo.Nombre = promocion.Nombre;
-                modelo.Descripcion = promocion.Descripcion;
-                modelo.Precio = promocion.Valor;
-                modelo.Estado = promocion.Estado;
-                modelo.ImagenActual = promocion.ImagenUrl;
-                modelo.ImagenActualDeleteUrl = promocion.DeleteUrl;
-            }
-
-            var cantidades = new Dictionary<int, int>();
-            if (promocion != null)
-            {
-                var filas = await _context.DetallePromociones
-                    .Where(dp => dp.IdPromocion == promocion.IdPromocion)
-                    .ToListAsync();
-
-                foreach (var fila in filas)
-                    cantidades[fila.IdProducto] = fila.Cantidad;
-            }
-
-            modelo.Incluidos = await ObtenerCandidatosAsync();
-            foreach (var item in modelo.Incluidos)
-            {
-                if (cantidades.TryGetValue(item.IdProducto, out var cant))
-                {
-                    item.Seleccionado = true;
-                    item.Cantidad = cant;
-                }
-            }
-
-            return modelo;
-        }
-
-        private static List<ProductoPromocionItem> ObtenerIncluidosValidos(List<ProductoPromocionItem>? incluidos)
-        {
-            return incluidos?
-                .Where(i => i.Seleccionado && i.IdProducto > 0 && i.Cantidad > 0)
-                .ToList() ?? new List<ProductoPromocionItem>();
-        }
-
-        // Reemplaza los productos incluidos (detalle_promociones) por los seleccionados
-        private async Task ActualizarDetallePromocionAsync(int idPromocion, List<ProductoPromocionItem> incluidos)
-        {
-            var actuales = await _context.DetallePromociones
-                .Where(dp => dp.IdPromocion == idPromocion)
-                .ToListAsync();
-
-            var cantidades = incluidos.ToDictionary(i => i.IdProducto, i => i.Cantidad);
-
-            foreach (var actual in actuales.Where(a => !cantidades.ContainsKey(a.IdProducto)).ToList())
-                _context.DetallePromociones.Remove(actual);
-
-            foreach (var fila in actuales.Where(a => cantidades.ContainsKey(a.IdProducto)))
-                fila.Cantidad = cantidades[fila.IdProducto];
-
-            foreach (var item in incluidos.Where(i => actuales.All(a => a.IdProducto != i.IdProducto)))
-            {
-                _context.DetallePromociones.Add(new DetallePromocion
-                {
-                    IdPromocion = idPromocion,
-                    IdProducto = item.IdProducto,
-                    Cantidad = item.Cantidad
-                });
-            }
-        }
-
-        private async Task<List<PromocionListadoViewModel>> ConstruirListadoPromocionesAsync()
-        {
-            var promociones = await _context.Promociones
-                .Include(p => p.DetallePromociones!)
-                    .ThenInclude(dp => dp.Producto)
-                .OrderByDescending(p => p.IdPromocion)
-                .ToListAsync();
-
-            return promociones.Select(p =>
-            {
-                var incluidos = p.DetallePromociones!.Where(dp => dp.Producto != null).ToList();
-
-                return new PromocionListadoViewModel
-                {
-                    Promocion = p,
-                    SumaProductos = incluidos.Sum(dp => dp.Producto!.Precio * dp.Cantidad),
-                    CantidadProductos = incluidos.Count,
-                    ResumenProductos = string.Join(", ", incluidos.Select(dp => $"{dp.Producto!.Nombre} x{dp.Cantidad}"))
-                };
-            }).ToList();
-        }
-
-
-        // GET: Productos/PromocionCreate
-        public async Task<IActionResult> PromocionCreate()
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            return View(VistaPromocionForm, await ConstruirFormularioPromocionAsync(null));
-        }
-
-        // POST: Productos/PromocionCreate
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PromocionCreate(PromocionFormViewModel modelo, IFormFile? imagenFile)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            return await GuardarPromocionAsync(null, modelo, esCreacion: true, imagenFile);
-        }
-
-        // GET: Productos/PromocionEdit/5
-        public async Task<IActionResult> PromocionEdit(int? id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            if (id == null)
-                return NotFound();
-
-            var promocion = await _context.Promociones
-                .FirstOrDefaultAsync(p => p.IdPromocion == id);
-            if (promocion == null)
-                return NotFound();
-
-            return View(VistaPromocionForm, await ConstruirFormularioPromocionAsync(promocion));
-        }
-
-        // POST: Productos/PromocionEdit/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PromocionEdit(int id, PromocionFormViewModel modelo, IFormFile? imagenFile)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            if (id != modelo.IdPromocion)
-                return NotFound();
-
-            return await GuardarPromocionAsync(id, modelo, esCreacion: false, imagenFile);
-        }
-
-        // POST: Productos/PromocionEliminarImagen/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PromocionEliminarImagen(int id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            var promocion = await _context.Promociones
-                .FirstOrDefaultAsync(p => p.IdPromocion == id);
-            if (promocion == null)
-                return NotFound();
-
-            await ImgbbHelper.EliminarImagenAsync(promocion.DeleteUrl);
-            promocion.ImagenUrl = null;
-            promocion.DisplayUrl = null;
-            promocion.DeleteUrl = null;
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] = "Imagen de la promoción eliminada correctamente.";
-            return RedirectToAction(nameof(PromocionEdit), new { id });
-        }
-
-        // GET: Productos/PromocionDetails/5
-        public async Task<IActionResult> PromocionDetails(int? id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            if (id == null)
-                return NotFound();
-
-            var modelo = await ConstruirDetallePromocionAsync(id.Value);
-            if (modelo == null)
-                return NotFound();
-
-            return View(VistaPromocionDetails, modelo);
-        }
-
-        // GET: Productos/PromocionDelete/5
-        public async Task<IActionResult> PromocionDelete(int? id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            if (id == null)
-                return NotFound();
-
-            var promocion = await _context.Promociones
-                .Include(p => p.DetallePromociones!)
-                    .ThenInclude(dp => dp.Producto)
-                .FirstOrDefaultAsync(p => p.IdPromocion == id);
-            if (promocion == null)
-                return NotFound();
-
-            var modelo = ConstruirDetalleDesdeEntidad(promocion);
-            return View(VistaPromocionDelete, modelo);
-        }
-
-        // POST: Productos/PromocionDelete/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> PromocionDelete(int id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            var promocion = await _context.Promociones
-                .FirstOrDefaultAsync(p => p.IdPromocion == id);
-            if (promocion == null)
-                return NotFound();
-
-            // No se permite borrar una promoción que ya se usó en pedidos facturados
-            var usada = await _context.Pedidos.AnyAsync(p => p.IdPromocion == id);
-            if (usada)
-            {
-                TempData["Error"] = "La promoción ya se usó en pedidos facturados, por lo que no se puede eliminar. Puedes pasarla a INACTIVA.";
-                return RedirectToAction(nameof(Index), new { pestana = "promociones" });
-            }
-
-            await ImgbbHelper.EliminarImagenAsync(promocion.DeleteUrl);
-
-            _context.DetallePromociones.RemoveRange(
-                await _context.DetallePromociones.Where(dp => dp.IdPromocion == id).ToListAsync());
-            _context.Promociones.Remove(promocion);
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] = "Promoción eliminada correctamente.";
-            return RedirectToAction(nameof(Index), new { pestana = "promociones" });
-        }
-
-        private async Task<IActionResult> GuardarPromocionAsync(int? id, PromocionFormViewModel modelo, bool esCreacion, IFormFile? imagenFile = null)
-        {
-            modelo.Incluidos ??= new List<ProductoPromocionItem>();
-
-            // Nombres y precios se toman de la base: el formulario solo manda el checkbox y la cantidad
-            var reales = await _context.Productos
-                .Select(p => new { p.IdProducto, p.Nombre, p.Precio })
-                .ToListAsync();
-
-            foreach (var item in modelo.Incluidos)
-            {
-                var real = reales.FirstOrDefault(r => r.IdProducto == item.IdProducto);
-                if (real == null) continue;
-                item.Nombre = real.Nombre;
-                item.Precio = real.Precio;
-            }
-
-            var seleccionados = ObtenerIncluidosValidos(modelo.Incluidos)
-                .Where(s => reales.Any(r => r.IdProducto == s.IdProducto))
-                .ToList();
-
-            if (string.IsNullOrWhiteSpace(modelo.Nombre))
-                ModelState.AddModelError(nameof(modelo.Nombre), "El nombre de la promoción es obligatorio.");
-
-            if (seleccionados.Count == 0)
-                ModelState.AddModelError(string.Empty, "Selecciona al menos un producto para la promoción.");
-
-            if (modelo.Precio <= 0)
-                ModelState.AddModelError(nameof(modelo.Precio), "El precio de la promoción debe ser mayor a cero.");
-
-            // El cajero cobra la suma de los productos y descuenta la diferencia, así que un
-            // precio mayor que esa suma no se podría representar como descuento.
-            var sumaProductos = seleccionados.Sum(s => s.Precio * s.Cantidad);
-            if (modelo.Precio > sumaProductos)
-                ModelState.AddModelError(nameof(modelo.Precio), $"El precio no puede superar la suma de los productos (Bs {sumaProductos.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}).");
-
-
-            if (modelo.Estado != "ACTIVA" && modelo.Estado != "INACTIVA")
-                modelo.Estado = "ACTIVA";
-
-            if (!ModelState.IsValid)
-                return View(VistaPromocionForm, modelo);
-
-            Promocion promocion;
-            if (esCreacion)
-            {
-                promocion = new Promocion
-                {
-                    Nombre = modelo.Nombre.Trim(),
-                    Descripcion = string.IsNullOrWhiteSpace(modelo.Descripcion) ? null : modelo.Descripcion.Trim(),
-                    Tipo = "PAQUETE",
-                    Valor = modelo.Precio,
-                    FechaInicio = DateTime.Today,
-                    FechaFin = DateTime.Today.AddYears(5),
-                    Estado = modelo.Estado
-                };
-
-                _context.Promociones.Add(promocion);
-                await _context.SaveChangesAsync();
-            }
-            else
-            {
-                var existente = await _context.Promociones.FindAsync(id);
-                if (existente == null)
-                    return NotFound();
-
-                existente.Nombre = modelo.Nombre.Trim();
-                existente.Descripcion = string.IsNullOrWhiteSpace(modelo.Descripcion) ? null : modelo.Descripcion.Trim();
-                existente.Valor = modelo.Precio;
-                existente.Estado = modelo.Estado;
-                promocion = existente;
-            }
-
-            // Imagen: si viene un archivo nuevo se sube a ImgBB y se borra la anterior
-            if (imagenFile != null && imagenFile.Length > 0)
-            {
-                var imagen = await ImgbbHelper.SubirImagenAsync(imagenFile, _imgbbApiKey ?? "");
-                if (imagen?.Url == null)
-                {
-                    ModelState.AddModelError(string.Empty, "No se pudo subir la imagen a ImgBB. Verifica el archivo y vuelve a intentarlo.");
-                }
-                else
-                {
-                    var anterior = promocion.DeleteUrl;
-                    promocion.ImagenUrl = imagen.Url;
-                    promocion.DisplayUrl = imagen.DisplayUrl;
-                    promocion.DeleteUrl = imagen.DeleteUrl;
-                    if (!string.IsNullOrWhiteSpace(anterior))
-                        await ImgbbHelper.EliminarImagenAsync(anterior);
-                }
-            }
-
-            await ActualizarDetallePromocionAsync(promocion.IdPromocion, seleccionados);
-            await _context.SaveChangesAsync();
-
-            if (!ModelState.IsValid)
-                return View(VistaPromocionForm, modelo);
-
-            if (esCreacion)
-            {
-                var resumen = new PromocionListadoViewModel
-                {
-                    Promocion = promocion,
-                    SumaProductos = seleccionados.Sum(s => s.Precio * s.Cantidad)
-                };
-
-                TempData["Mensaje"] = resumen.PorcentajeAhorro > 0
-                    ? $"Promoción creada. Ahorro del {resumen.PorcentajeAhorro.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%."
-                    : "Promoción creada correctamente.";
-            }
-            else
-            {
-                TempData["Mensaje"] = "Promoción actualizada correctamente.";
-            }
-
-            return RedirectToAction(nameof(Index), new { pestana = "promociones" });
-        }
-
-        // GET: Productos
         public async Task<IActionResult> Index(string? pestana)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            // Las promociones viven en su propia tabla (promociones), no en productos
-            var productos = await _context.Productos
-                .Include(p => p.Categoria)
-                .Include(p => p.Receta)
-                .OrderByDescending(p => p.IdProducto)
-                .ToListAsync();
+            var productos = await _apiService.GetAllAsync();
+            var model = productos.ToModel();
 
-            var promociones = await ConstruirListadoPromocionesAsync();
+            // La API ya devuelve cada promoción con sus productos incluidos y
+            // con el ahorro ya calculado, así que el listado se mapea directo.
+            var promociones = await _promocionesApiService.GetAllAsync();
+            ViewBag.Promociones = promociones?.Select(ToListadoViewModel).ToList()
+                ?? new List<PromocionListadoViewModel>();
+            ViewBag.TotalPromociones = ViewBag.Promociones.Count;
+            ViewBag.TotalProductos = model.Count;
+            ViewBag.PestanaActiva = pestana ?? "productos";
 
-            ViewBag.PestanaActiva = pestana == "promociones" ? "promociones" : "productos";
-            ViewBag.TotalProductos = productos.Count;
-            ViewBag.TotalPromociones = promociones.Count;
-            ViewBag.Promociones = promociones;
-
-            return View(VistaProductos, productos);
+            return View("~/Views/Administrador/Productos/Index.cshtml", model);
         }
 
-        // GET: Productos/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var producto = await _context.Productos
-                .Include(p => p.Categoria)
-                .Include(p => p.Receta)
-                    .ThenInclude(r => r.DetalleRecetas)
-                        .ThenInclude(d => d.Insumo)
-                .FirstOrDefaultAsync(m => m.IdProducto == id);
-            if (producto == null)
-            {
-                return NotFound();
-            }
+            var producto = await _apiService.GetByIdAsync(id.Value);
+            if (producto == null) return NotFound();
 
-            return View(VistaDetails, producto);
+            var model = producto.ToModel();
+            return View("~/Views/Administrador/Productos/Details.cshtml", model);
         }
 
-        private async Task<PromocionDetalleViewModel?> ConstruirDetallePromocionAsync(int idPromocion)
-        {
-            var promocion = await _context.Promociones
-                .Include(p => p.DetallePromociones!)
-                    .ThenInclude(dp => dp.Producto)
-                .FirstOrDefaultAsync(p => p.IdPromocion == idPromocion);
-
-            return promocion == null ? null : ConstruirDetalleDesdeEntidad(promocion);
-        }
-
-        private static PromocionDetalleViewModel ConstruirDetalleDesdeEntidad(Promocion promocion)
-        {
-            var incluidos = (promocion.DetallePromociones ?? new List<DetallePromocion>())
-                .Where(dp => dp.Producto != null)
-                .OrderBy(dp => dp.Producto!.Nombre)
-                .ToList();
-
-            return new PromocionDetalleViewModel
-            {
-                Promocion = promocion,
-                Incluidos = incluidos.Select(dp => new ProductoPromocionItem
-                {
-                    IdProducto = dp.IdProducto,
-                    Nombre = dp.Producto!.Nombre,
-                    Precio = dp.Producto!.Precio,
-                    Activo = dp.Producto!.Activo,
-                    Cantidad = dp.Cantidad
-                }).ToList()
-            };
-        }
-
-        // GET: Productos/Create
-        public IActionResult Create()
+        public async Task<IActionResult> Create()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            CargarListas();
-            return View(VistaCreate, new ProductoRecetaViewModel());
+            var categorias = await _categoriasApiService.GetAllAsync();
+            ViewBag.IdCategoria = new SelectList(categorias, "IdCategoria", "Nombre");
+
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
+            {
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
+
+            var model = new ProductoRecetaViewModel
+            {
+                Producto = new Producto(),
+                Receta = new Receta(),
+                IncluirReceta = false
+            };
+
+            return View("~/Views/Administrador/Productos/Create.cshtml", model);
         }
 
-        // POST: Productos/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(ProductoRecetaViewModel modelo, IFormFile? imagenFile)
+        public async Task<IActionResult> Create(ProductoRecetaViewModel model, IFormFile? imagenFile)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
-
-            var producto = modelo.Producto;
-            modelo.Receta ??= new RecetaViewModel();
-
-            var detallesValidos = ObtenerDetallesValidos(modelo.Receta.Detalles);
-            if (modelo.IncluirReceta && detallesValidos.Count == 0)
-            {
-                ModelState.AddModelError(string.Empty, "Agrega al menos un insumo con cantidad mayor a cero.");
-            }
 
             if (ModelState.IsValid)
             {
-                if (!string.IsNullOrWhiteSpace(producto.Codigo) &&
-                    await _context.Productos.AnyAsync(p => p.Codigo == producto.Codigo))
+                var producto = new ProductoDto
                 {
-                    ModelState.AddModelError(string.Empty, "Ese código de producto ya está en uso.");
-                    CargarListas(producto.IdCategoria);
-                    return View(VistaCreate, modelo);
-                }
-
-                var nuevo = new Producto
-                {
-                    IdCategoria = producto.IdCategoria,
-                    Codigo = producto.Codigo,
-                    Nombre = producto.Nombre,
-                    Descripcion = producto.Descripcion,
-                    Precio = producto.Precio,
-                    Activo = producto.Activo
+                    IdCategoria = model.Producto.IdCategoria,
+                    Codigo = model.Producto.Codigo,
+                    Nombre = model.Producto.Nombre,
+                    Descripcion = model.Producto.Descripcion,
+                    Precio = model.Producto.Precio,
+                    Activo = model.Producto.Activo,
+                    ImagenUrl = model.Producto.ImagenUrl,
+                    DisplayUrl = model.Producto.DisplayUrl
                 };
 
-                if (imagenFile != null && imagenFile.Length > 0)
+                // Subir la imagen (si viene) antes de crear el producto en la API.
+                var (okImagen, resultado, errorImagen) = await SubirImagenSiViene(imagenFile);
+                if (!okImagen)
                 {
-                    var imagen = await ImgbbHelper.SubirImagenAsync(imagenFile, _imgbbApiKey!);
-                    if (imagen?.Url == null)
+                    ModelState.AddModelError(string.Empty, errorImagen!);
+                }
+                else
+                {
+                    if (resultado != null)
                     {
-                        ModelState.AddModelError(string.Empty, "No se pudo subir la imagen a ImgBB. Verifica el archivo y vuelve a intentarlo.");
-                        CargarListas(producto.IdCategoria);
-                        return View(VistaCreate, modelo);
+                        producto.ImagenUrl = resultado.Url;
+                        producto.DisplayUrl = resultado.DisplayUrl;
                     }
 
-                    nuevo.ImagenUrl = imagen.Url;
-                    nuevo.DisplayUrl = imagen.DisplayUrl;
-                    nuevo.DeleteUrl = imagen.DeleteUrl;
+                    var (success, message) = await _apiService.CreateAsync(producto);
+                    if (success)
+                        return RedirectToAction(nameof(Index));
+
+                    ModelState.AddModelError(string.Empty, message);
                 }
-
-                if (modelo.IncluirReceta)
-                {
-                    var receta = new Receta
-                    {
-                        Descripcion = modelo.Receta.Descripcion,
-                        Activo = modelo.Receta.Activo,
-                        DetalleRecetas = new List<DetalleReceta>()
-                    };
-
-                    foreach (var detalle in detallesValidos)
-                    {
-                        var insumo = await _context.Insumos.FindAsync(detalle.IdInsumo);
-                        if (insumo == null)
-                            continue;
-
-                        receta.DetalleRecetas.Add(new DetalleReceta
-                        {
-                            IdInsumo = insumo.IdInsumo,
-                            Cantidad = detalle.Cantidad,
-                            UnidadMedida = detalle.UnidadMedida ?? insumo.UnidadMedida
-                        });
-                    }
-
-                    nuevo.Receta = receta;
-                }
-
-                _context.Productos.Add(nuevo);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
             }
 
-            CargarListas(producto.IdCategoria);
-            return View(VistaCreate, modelo);
+            var categorias = await _categoriasApiService.GetAllAsync();
+            ViewBag.IdCategoria = new SelectList(categorias, "IdCategoria", "Nombre");
+
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
+            {
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
+
+            return View("~/Views/Administrador/Productos/Create.cshtml", model);
         }
 
-        // GET: Productos/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var producto = await _context.Productos
-                .Include(p => p.Receta)
-                    .ThenInclude(r => r.DetalleRecetas)
-                        .ThenInclude(d => d.Insumo)
-                .FirstOrDefaultAsync(m => m.IdProducto == id);
-            if (producto == null)
-            {
-                return NotFound();
-            }
+            var producto = await _apiService.GetByIdAsync(id.Value);
+            if (producto == null) return NotFound();
 
-            // Las promociones se editan en su propio formulario
-            var modelo = new ProductoRecetaViewModel
-            {
-                Producto = producto,
-                IncluirReceta = producto.Receta != null,
-                Receta = new RecetaViewModel
-                {
-                    IdReceta = producto.Receta?.IdReceta ?? 0,
-                    IdProducto = producto.IdProducto,
-                    Descripcion = producto.Receta?.Descripcion,
-                    Activo = producto.Receta?.Activo ?? true,
-                    Detalles = producto.Receta?.DetalleRecetas?
-                        .Select(d => new DetalleRecetaViewModel
-                        {
-                            IdDetalleReceta = d.IdDetalleReceta,
-                            IdInsumo = d.IdInsumo,
-                            Cantidad = d.Cantidad,
-                            UnidadMedida = d.UnidadMedida
-                        })
-                        .ToList() ?? new List<DetalleRecetaViewModel>()
-                }
-            };
+            var categorias = await _categoriasApiService.GetAllAsync();
+            ViewBag.IdCategoria = new SelectList(categorias, "IdCategoria", "Nombre");
 
-            CargarListas(producto.IdCategoria);
-            return View(VistaEdit, modelo);
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
+            {
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
+
+            var model = producto.ToRecetaViewModel();
+            return View("~/Views/Administrador/Productos/Edit.cshtml", model);
         }
 
-        // POST: Productos/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, ProductoRecetaViewModel modelo, IFormFile? imagenFile)
+        public async Task<IActionResult> Edit(int id, ProductoRecetaViewModel model, IFormFile? imagenFile)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var producto = modelo.Producto;
-            modelo.Receta ??= new RecetaViewModel();
-
-            if (id != producto.IdProducto)
-            {
-                return NotFound();
-            }
-
-            var existente = await _context.Productos.FindAsync(id);
-            if (existente == null)
-            {
-                return NotFound();
-            }
-
-            // Las promociones se editan en su propio formulario
-            var detallesValidos = ObtenerDetallesValidos(modelo.Receta.Detalles);
-            if (modelo.IncluirReceta && detallesValidos.Count == 0)
-            {
-                ModelState.AddModelError(string.Empty, "Agrega al menos un insumo con cantidad mayor a cero.");
-            }
+            if (id != model.Producto.IdProducto) return NotFound();
 
             if (ModelState.IsValid)
             {
-                if (!string.IsNullOrWhiteSpace(producto.Codigo) &&
-                    await _context.Productos.AnyAsync(p => p.Codigo == producto.Codigo && p.IdProducto != producto.IdProducto))
+                var producto = new ProductoDto
                 {
-                    ModelState.AddModelError(string.Empty, "Ese código de producto ya está en uso.");
-                    CargarListas(producto.IdCategoria);
-                    return View(VistaEdit, modelo);
+                    IdProducto = model.Producto.IdProducto,
+                    IdCategoria = model.Producto.IdCategoria,
+                    Codigo = model.Producto.Codigo,
+                    Nombre = model.Producto.Nombre,
+                    Descripcion = model.Producto.Descripcion,
+                    Precio = model.Producto.Precio,
+                    Activo = model.Producto.Activo,
+                    ImagenUrl = model.Producto.ImagenUrl,
+                    DisplayUrl = model.Producto.DisplayUrl
+                };
+
+                var (okImagen, resultado, errorImagen) = await SubirImagenSiViene(imagenFile);
+                if (!okImagen)
+                {
+                    ModelState.AddModelError(string.Empty, errorImagen!);
                 }
-
-                existente.IdCategoria = producto.IdCategoria;
-                existente.Codigo = producto.Codigo;
-                existente.Nombre = producto.Nombre;
-                existente.Descripcion = producto.Descripcion;
-                existente.Precio = producto.Precio;
-                existente.Activo = producto.Activo;
-
-                if (imagenFile != null && imagenFile.Length > 0)
+                else
                 {
-                    var imagen = await ImgbbHelper.SubirImagenAsync(imagenFile, _imgbbApiKey!);
-                    if (imagen?.Url == null)
+                    if (resultado != null)
                     {
-                        ModelState.AddModelError(string.Empty, "No se pudo subir la imagen a ImgBB. Verifica el archivo y vuelve a intentarlo.");
-                        CargarListas(producto.IdCategoria);
-                        return View(VistaEdit, modelo);
-                    }
-
-                    await ImgbbHelper.EliminarImagenAsync(existente.DeleteUrl);
-                    existente.ImagenUrl = imagen.Url;
-                    existente.DisplayUrl = imagen.DisplayUrl;
-                    existente.DeleteUrl = imagen.DeleteUrl;
-                }
-
-                var receta = await _context.Recetas
-                    .Include(r => r.DetalleRecetas)
-                    .FirstOrDefaultAsync(r => r.IdProducto == id);
-
-                if (modelo.IncluirReceta)
-                {
-                    if (receta == null)
-                    {
-                        receta = new Receta
-                        {
-                            IdProducto = id,
-                            Descripcion = modelo.Receta.Descripcion,
-                            Activo = modelo.Receta.Activo,
-                            DetalleRecetas = new List<DetalleReceta>()
-                        };
-
-                        foreach (var detalle in detallesValidos)
-                        {
-                            var insumo = await _context.Insumos.FindAsync(detalle.IdInsumo);
-                            if (insumo == null)
-                                continue;
-
-                            receta.DetalleRecetas.Add(new DetalleReceta
-                            {
-                                IdInsumo = insumo.IdInsumo,
-                                Cantidad = detalle.Cantidad,
-                                UnidadMedida = detalle.UnidadMedida ?? insumo.UnidadMedida
-                            });
-                        }
-
-                        _context.Recetas.Add(receta);
+                        producto.ImagenUrl = resultado.Url;
+                        producto.DisplayUrl = resultado.DisplayUrl;
                     }
                     else
                     {
-                        receta.Descripcion = modelo.Receta.Descripcion;
-                        receta.Activo = modelo.Receta.Activo;
-
-                        _context.DetalleRecetas.RemoveRange(receta.DetalleRecetas ?? new List<DetalleReceta>());
-                        foreach (var detalle in detallesValidos)
+                        // Sin archivo nuevo: conservar la imagen actual. Si no se
+                        // hace, la edición enviaría la URL en blanco y la API
+                        // borraría la imagen del producto.
+                        var actual = await _apiService.GetByIdAsync(id);
+                        if (actual != null)
                         {
-                            var insumo = await _context.Insumos.FindAsync(detalle.IdInsumo);
-                            if (insumo == null)
-                                continue;
-
-                            _context.DetalleRecetas.Add(new DetalleReceta
-                            {
-                                IdReceta = receta.IdReceta,
-                                IdInsumo = insumo.IdInsumo,
-                                Cantidad = detalle.Cantidad,
-                                UnidadMedida = detalle.UnidadMedida ?? insumo.UnidadMedida
-                            });
+                            producto.ImagenUrl = actual.ImagenUrl;
+                            producto.DisplayUrl = actual.DisplayUrl;
                         }
                     }
-                }
-                else if (receta != null)
-                {
-                    _context.DetalleRecetas.RemoveRange(receta.DetalleRecetas ?? new List<DetalleReceta>());
-                    _context.Recetas.Remove(receta);
-                }
 
-                try
-                {
-                    await _context.SaveChangesAsync();
+                    var (success, message) = await _apiService.EditAsync(id, producto);
+                    if (success)
+                        return RedirectToAction(nameof(Index));
+
+                    ModelState.AddModelError(string.Empty, message);
                 }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ProductoExists(producto.IdProducto))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
             }
 
-            CargarListas(producto.IdCategoria);
-            return View(VistaEdit, modelo);
-        }
+            var categorias = await _categoriasApiService.GetAllAsync();
+            ViewBag.IdCategoria = new SelectList(categorias, "IdCategoria", "Nombre");
 
-        // POST: Productos/EliminarImagen/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EliminarImagen(int id)
-        {
-            var acceso = ValidarAcceso();
-            if (acceso != null) return acceso;
-
-            var producto = await _context.Productos.FindAsync(id);
-            if (producto == null)
+            var insumos = await _insumosApiService.GetAllAsync();
+            ViewBag.Insumos = insumos?.Select(i => new Insumo
             {
-                return NotFound();
-            }
+                IdInsumo = i.IdInsumo,
+                Nombre = i.Nombre,
+                Descripcion = i.Descripcion,
+                UnidadMedida = i.UnidadMedida,
+                StockActual = i.StockActual,
+                StockMinimo = i.StockMinimo,
+                CostoUnitario = i.CostoUnitario,
+                Activo = i.Activo,
+                IdDestino = i.IdDestino,
+                DestinoNombre = i.DestinoNombre,
+                BajoMinimo = i.BajoMinimo
+            }).ToList() ?? new List<Insumo>();
 
-            await ImgbbHelper.EliminarImagenAsync(producto.DeleteUrl);
-            producto.ImagenUrl = null;
-            producto.DisplayUrl = null;
-            producto.DeleteUrl = null;
-            await _context.SaveChangesAsync();
-
-            TempData["Mensaje"] = "Imagen eliminada correctamente.";
-            return RedirectToAction(nameof(Edit), new { id });
+            return View("~/Views/Administrador/Productos/Edit.cshtml", model);
         }
 
-        // GET: Productos/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var producto = await _context.Productos
-                .Include(p => p.Categoria)
-                .Include(p => p.Receta)
-                .FirstOrDefaultAsync(m => m.IdProducto == id);
-            if (producto == null)
-            {
-                return NotFound();
-            }
+            var producto = await _apiService.GetByIdAsync(id.Value);
+            if (producto == null) return NotFound();
 
-            return View(VistaDelete, producto);
+            var model = producto.ToModel();
+            return View("~/Views/Administrador/Productos/Delete.cshtml", model);
         }
 
-        // POST: Productos/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -847,29 +322,402 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var producto = await _context.Productos.FindAsync(id);
-            if (producto == null)
-            {
-                return RedirectToAction(nameof(Index));
-            }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-            if (await _context.DetallesPedidos.AnyAsync(d => d.IdProducto == id) ||
-                     await _context.DetallePromociones.AnyAsync(d => d.IdProducto == id) ||
-                     await _context.Recetas.AnyAsync(r => r.IdProducto == id))
-            {
-                TempData["Error"] = "No se puede eliminar: el producto tiene pedidos, promociones o una receta asociada.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            await ImgbbHelper.EliminarImagenAsync(producto.DeleteUrl);
-            _context.Productos.Remove(producto);
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool ProductoExists(int id)
+        // Quita solo la imagen del producto, sin tocar el resto de sus datos.
+        // Lo usa el botón 'Eliminar imagen' del formulario de edición.
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EliminarImagen(int id)
         {
-            return _context.Productos.Any(e => e.IdProducto == id);
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var (success, message) = await _apiService.QuitarImagenAsync(id);
+            if (!success)
+                TempData["Error"] = message;
+            else
+                TempData["Mensaje"] = "Imagen del producto eliminada.";
+
+            return RedirectToAction(nameof(Edit), new { id });
+        }
+    }
+
+    public partial class ProductosController : Controller
+    {
+        // =============================================================
+        //  PROMOCIONES
+        //  La API es la única que habla con la base de datos. El listado
+        //  ya llega con los productos incluidos y con el ahorro calculado,
+        //  así que estas acciones solo mapean y delegan.
+        // =============================================================
+
+        // DTO de la API -> fila del listado.
+        private static PromocionListadoViewModel ToListadoViewModel(PromocionDto dto)
+        {
+            return new PromocionListadoViewModel
+            {
+                IdPromocion = dto.IdPromocion,
+                Nombre = dto.Nombre,
+                Descripcion = dto.Descripcion,
+                Tipo = dto.Tipo,
+                FechaInicio = dto.FechaInicio.ToDateTime(TimeOnly.MinValue),
+                FechaFin = dto.FechaFin.ToDateTime(TimeOnly.MinValue),
+                Estado = dto.Estado,
+                EstaActiva = dto.EstaActiva,
+                TieneAhorro = dto.TieneAhorro,
+                PorcentajeAhorro = dto.PorcentajeAhorro,
+                Ahorro = dto.Ahorro,
+                CantidadProductos = dto.CantidadProductos,
+                ResumenProductos = dto.ResumenProductos,
+                SumaProductos = dto.SumaProductos,
+                Precio = dto.Valor,
+                ImagenUrl = dto.ImagenUrl,
+                Incluidos = dto.Incluidos.Select(i => new PromocionListadoItem
+                {
+                    IdProducto = i.IdProducto,
+                    ProductoNombre = i.ProductoNombre,
+                    ProductoPrecio = i.ProductoPrecio,
+                    ProductoActivo = i.ProductoActivo,
+                    Cantidad = i.Cantidad,
+                    Subtotal = i.Subtotal
+                }).ToList()
+            };
+        }
+
+        // DTO de la API -> detalle.
+        private static PromocionDetalleViewModel ToDetalleViewModel(PromocionDto dto)
+        {
+            return new PromocionDetalleViewModel
+            {
+                IdPromocion = dto.IdPromocion,
+                Nombre = dto.Nombre,
+                Descripcion = dto.Descripcion,
+                Tipo = dto.Tipo,
+                FechaInicio = dto.FechaInicio.ToDateTime(TimeOnly.MinValue),
+                FechaFin = dto.FechaFin.ToDateTime(TimeOnly.MinValue),
+                Estado = dto.Estado,
+                EstaActiva = dto.EstaActiva,
+                SumaProductos = dto.SumaProductos,
+                Ahorro = dto.Ahorro,
+                TieneAhorro = dto.TieneAhorro,
+                PorcentajeAhorro = dto.PorcentajeAhorro,
+                Precio = dto.Valor,
+                ImagenUrl = dto.ImagenUrl,
+                CantidadProductos = dto.CantidadProductos,
+                ResumenProductos = dto.ResumenProductos,
+                Incluidos = dto.Incluidos.Select(i => new Producto
+                {
+                    IdProducto = i.IdProducto,
+                    Nombre = i.ProductoNombre ?? "(producto eliminado)",
+                    Precio = i.ProductoPrecio,
+                    Activo = i.ProductoActivo,
+                    Cantidad = i.Cantidad
+                }).ToList()
+            };
+        }
+
+        // El formulario pinta el catálogo completo con checkbox, así que se cruza
+        // el catálogo con lo que la API dice que ya está incluido.
+        private static List<Producto> ArmarCatalogoParaFormulario(
+            IEnumerable<ProductoDto>? catalogo,
+            IEnumerable<PromocionProductoDto>? incluidos)
+        {
+            var mapa = (incluidos ?? Enumerable.Empty<PromocionProductoDto>())
+                .ToDictionary(i => i.IdProducto);
+
+            return (catalogo ?? Enumerable.Empty<ProductoDto>())
+                .Select(p => new Producto
+                {
+                    IdProducto = p.IdProducto,
+                    Codigo = p.Codigo,
+                    Nombre = p.Nombre,
+                    Descripcion = p.Descripcion,
+                    Precio = p.Precio,
+                    Activo = p.Activo,
+                    ImagenUrl = p.ImagenUrl,
+                    DisplayUrl = p.DisplayUrl,
+                    IdCategoria = p.IdCategoria,
+                    CategoriaNombre = p.CategoriaNombre,
+                    TieneReceta = p.TieneReceta,
+                    Seleccionado = mapa.ContainsKey(p.IdProducto),
+                    Cantidad = mapa.TryGetValue(p.IdProducto, out var inc) && inc.Cantidad > 0
+                        ? inc.Cantidad
+                        : 1
+                })
+                .ToList();
+        }
+
+        // Al volver del POST el catálogo se reconstruye igual, pero respetando lo
+        // que el usuario marcó. El checkbox desmarcado no viaja en el form, así
+        // que se toma elposted por IdProducto y se cruza con el catálogo.
+        private static List<Producto> ArmarCatalogoConMarcas(
+            IEnumerable<ProductoDto>? catalogo,
+            List<Producto>? posted)
+        {
+            var marcadas = (posted ?? new List<Producto>())
+                .Where(p => p.Seleccionado)
+                .ToDictionary(p => p.IdProducto, p => p.Cantidad);
+
+            var baseCatalogo = ArmarCatalogoParaFormulario(catalogo, null);
+
+            return baseCatalogo
+                .Select(p =>
+                {
+                    if (marcadas.ContainsKey(p.IdProducto))
+                    {
+                        p.Seleccionado = true;
+                        if (marcadas[p.IdProducto] > 0)
+                            p.Cantidad = marcadas[p.IdProducto];
+                    }
+                    return p;
+                })
+                .ToList();
+        }
+
+        // ViewModel del formulario -> request de escritura de la API.
+        private static PromocionRequestDto ToRequestDto(PromocionFormViewModel model)
+        {
+            var hoy = DateTime.Today;
+
+            return new PromocionRequestDto
+            {
+                Nombre = model.Nombre,
+                Descripcion = model.Descripcion,
+                Tipo = string.IsNullOrWhiteSpace(model.Tipo) ? "PAQUETE" : model.Tipo,
+                Valor = model.Precio,
+                FechaInicio = DateOnly.FromDateTime(model.FechaInicio ?? hoy),
+                FechaFin = DateOnly.FromDateTime(model.FechaFin ?? hoy.AddYears(1)),
+                Estado = model.Estado == "ACTIVA" ? "ACTIVA" : "INACTIVA",
+                ImagenUrl = model.ImagenActual,
+                DisplayUrl = model.DisplayUrlActual,
+                // Solo se envían los productos marcados; la API borra los
+                // anteriores y vuelve a crear estos.
+                DetallePromociones = model.Incluidos
+                    .Where(p => p.Seleccionado)
+                    .Select(p => new DetallePromocionRequestDto
+                    {
+                        IdProducto = p.IdProducto,
+                        Cantidad = p.Cantidad > 0 ? p.Cantidad : 1
+                    })
+                    .ToList()
+            };
+        }
+
+        public async Task<IActionResult> PromocionDetails(int? id)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            if (id == null) return NotFound();
+
+            var promocion = await _promocionesApiService.GetByIdAsync(id.Value);
+            if (promocion == null) return NotFound();
+
+            return View("~/Views/Administrador/Productos/PromocionDetails.cshtml",
+                ToDetalleViewModel(promocion));
+        }
+
+        public async Task<IActionResult> PromocionCreate()
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var productos = await _apiService.GetAllAsync();
+
+            var model = new PromocionFormViewModel
+            {
+                FechaInicio = DateTime.Today,
+                FechaFin = DateTime.Today.AddMonths(1),
+                Estado = "ACTIVA",
+                Incluidos = ArmarCatalogoParaFormulario(productos, null)
+            };
+
+            return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromocionCreate(PromocionFormViewModel model, IFormFile? imagenFile)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var productos = await _apiService.GetAllAsync();
+
+            if (string.IsNullOrWhiteSpace(model.Nombre))
+                ModelState.AddModelError(nameof(model.Nombre), "El nombre es obligatorio.");
+
+            if (!ModelState.IsValid)
+            {
+                model.Incluidos = ArmarCatalogoConMarcas(productos, model.Incluidos);
+                model.EsEdicion = false;
+                return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+            }
+
+            // Subir la imagen (si viene) antes de crear la promoción en la API.
+            var (okImagen, resultado, errorImagen) = await SubirImagenSiViene(imagenFile);
+            if (!okImagen)
+            {
+                ModelState.AddModelError(string.Empty, errorImagen!);
+                model.Incluidos = ArmarCatalogoConMarcas(productos, model.Incluidos);
+                model.EsEdicion = false;
+                return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+            }
+
+            if (resultado != null)
+            {
+                model.ImagenActual = resultado.Url;
+                model.DisplayUrlActual = resultado.DisplayUrl;
+            }
+
+            var (success, message) = await _promocionesApiService.CreateAsync(ToRequestDto(model));
+            if (success)
+            {
+                TempData["Ok"] = "Promoción creada correctamente.";
+                return RedirectToAction(nameof(Index), new { pestana = "promociones" });
+            }
+
+            ModelState.AddModelError(string.Empty, message);
+            model.Incluidos = ArmarCatalogoConMarcas(productos, model.Incluidos);
+            model.EsEdicion = false;
+            return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+        }
+
+        public async Task<IActionResult> PromocionEdit(int? id)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            if (id == null) return NotFound();
+
+            var promocion = await _promocionesApiService.GetByIdAsync(id.Value);
+            if (promocion == null) return NotFound();
+
+            var productos = await _apiService.GetAllAsync();
+
+            var model = new PromocionFormViewModel
+            {
+                IdPromocion = promocion.IdPromocion,
+                Nombre = promocion.Nombre,
+                Descripcion = promocion.Descripcion,
+                Tipo = promocion.Tipo,
+                FechaInicio = promocion.FechaInicio.ToDateTime(TimeOnly.MinValue),
+                FechaFin = promocion.FechaFin.ToDateTime(TimeOnly.MinValue),
+                Estado = promocion.Estado,
+                EsEdicion = true,
+                Precio = promocion.Valor,
+                SumaProductos = promocion.SumaProductos,
+                Ahorro = promocion.Ahorro,
+                PorcentajeAhorro = promocion.PorcentajeAhorro,
+                ImagenActual = promocion.ImagenUrl,
+                DisplayUrlActual = promocion.DisplayUrl,
+                Incluidos = ArmarCatalogoParaFormulario(productos, promocion.Incluidos)
+            };
+
+            return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromocionEdit(int id, PromocionFormViewModel model, IFormFile? imagenFile)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var originales = await _promocionesApiService.GetByIdAsync(id);
+            if (originales == null) return NotFound();
+
+            var productos = await _apiService.GetAllAsync();
+
+            // El checkbox desmarcado no manda valor, así que el binder deja
+            // Seleccionado=false en todos. Se reconstruye el catálogo cruzando
+            // lo posted con la lista real de productos.
+            model.Incluidos = ArmarCatalogoConMarcas(productos, model.Incluidos);
+            model.IdPromocion = id;
+            model.EsEdicion = true;
+            model.ImagenActual = originales.ImagenUrl;
+            model.DisplayUrlActual = originales.DisplayUrl;
+
+            // Si viene un archivo nuevo se sube a ImgBB y se reemplaza la imagen
+            // actual; si no, se conserva la que ya tiene la promoción.
+            var (okImagen, resultado, errorImagen) = await SubirImagenSiViene(imagenFile);
+            if (!okImagen)
+                ModelState.AddModelError(string.Empty, errorImagen!);
+            else if (resultado != null)
+            {
+                model.ImagenActual = resultado.Url;
+                model.DisplayUrlActual = resultado.DisplayUrl;
+            }
+
+            if (string.IsNullOrWhiteSpace(model.Nombre))
+                ModelState.AddModelError(nameof(model.Nombre), "El nombre es obligatorio.");
+
+            if (!ModelState.IsValid)
+            {
+                model.SumaProductos = originales.SumaProductos;
+                return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+            }
+
+            var (success, message) = await _promocionesApiService.EditAsync(id, ToRequestDto(model));
+            if (success)
+            {
+                TempData["Ok"] = "Promoción actualizada correctamente.";
+                return RedirectToAction(nameof(Index), new { pestana = "promociones" });
+            }
+
+            ModelState.AddModelError(string.Empty, message);
+            model.SumaProductos = originales.SumaProductos;
+            return View("~/Views/Administrador/Productos/PromocionForm.cshtml", model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromocionEliminarImagen(int id)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var (success, message) = await _promocionesApiService.QuitarImagenAsync(id);
+            if (!success)
+                TempData["Error"] = message;
+
+            return RedirectToAction(nameof(PromocionEdit), new { id });
+        }
+
+        public async Task<IActionResult> PromocionDelete(int? id)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            if (id == null) return NotFound();
+
+            var promocion = await _promocionesApiService.GetByIdAsync(id.Value);
+            if (promocion == null) return NotFound();
+
+            return View("~/Views/Administrador/Productos/PromocionDelete.cshtml",
+                ToDetalleViewModel(promocion));
+        }
+
+        [HttpPost, ActionName("PromocionDelete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PromocionDeleteConfirmed(int id)
+        {
+            var acceso = ValidarAcceso();
+            if (acceso != null) return acceso;
+
+            var (success, message) = await _promocionesApiService.DeleteAsync(id);
+            if (success)
+                TempData["Ok"] = "Promoción eliminada correctamente.";
+            else
+                TempData["Error"] = message;
+
+            return RedirectToAction(nameof(Index), new { pestana = "promociones" });
         }
     }
 }

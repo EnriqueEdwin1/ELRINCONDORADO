@@ -1,0 +1,142 @@
+@model ELRINCONDORADO.Models.Compra
+@using ELRINCONDORADO.Helpers
+@{
+    ViewData["Title"] = $"Comprobante Compra Nº {Model.IdCompra:D4}";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>EL RINCÓN DORADO</h1>
+        <p>Comprobante de Compra</p>
+    </div>
+
+    <div class="info-row">
+        <div><strong>Nº Compra:</strong> @Model.IdCompra.ToString("D4")</div>
+        <div><strong>Fecha:</strong> @Model.FechaCompra.ToString("dd/MM/yyyy HH:mm")</div>
+    </div>
+
+    <div class="info-row">
+        <div><strong>Proveedor:</strong> @Model.Proveedor?.Nombre</div>
+        <div><strong>Estado:</strong> @Model.Estado</div>
+    </div>
+
+    <div class="info-row">
+        <div><strong>Registrado por:</strong> @(Model.Empleado != null ? $"{Model.Empleado.Nombre} {Model.Empleado.Apellido}" : "—")</div>
+    </div>
+
+    <br />
+
+    <table>
+        <thead>
+            <tr>
+                <th>Insumo</th>
+                <th class="text-right">Cantidad</th>
+                <th class="text-right">Costo Unitario</th>
+                <th class="text-right">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Model.DetallesCompras != null && Model.DetallesCompras.Any())
+            {
+                @foreach (var detalle in Model.DetallesCompras)
+                {
+                    <tr>
+                        <td>@detalle.Insumo?.Nombre</td>
+                        <td class="text-right">@MonedaHelper.FormatearNumero(detalle.Cantidad) @detalle.Insumo?.UnidadMedida</td>
+                        <td class="text-right">@MonedaHelper.FormatearBs(detalle.CostoUnitario)</td>
+                        <td class="text-right">@MonedaHelper.FormatearBs(detalle.Subtotal)</td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4" style="text-align: center;">No hay detalles de compra</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Subtotal:</strong></td>
+                <td class="text-right">@MonedaHelper.FormatearBs(Model.Subtotal)</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Descuento:</strong></td>
+                <td class="text-right">- @MonedaHelper.FormatearBs(Model.Descuento)</td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="3" class="text-right"><strong>Total:</strong></td>
+                <td class="text-right">@MonedaHelper.FormatearBs(Model.Total)</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="footer">
+        <p>Este documento es un comprobante de compra generado automáticamente.</p>
+        <p>Fecha de emisión: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+    </div>
+
+    <script>
+        window.print();
+    </script>
+</body>
+</html>

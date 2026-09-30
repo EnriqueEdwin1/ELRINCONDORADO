@@ -230,6 +230,43 @@ public class PedidosController : ControllerBase
         return Ok(resumen);
     }
 
+    // Cola de cocina: los pedidos que la cocina debe ver (PENDIENTE, EN PREPARACION
+    // y LISTO), del más antiguo al más reciente. La pantalla de cocina la pide cada
+    // pocos segundos; el detalle solo lleva lo que la cocina necesita.
+    [HttpGet("cola")]
+    [ProducesResponseType(typeof(List<ColaPedidoDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ColaPedidoDto>>> GetCola(CancellationToken ct)
+    {
+        var estados = new[] { "PENDIENTE", "EN PREPARACION", "LISTO" };
+
+        var cola = await _db.Pedidos
+            .AsNoTracking()
+            .Where(p => estados.Contains(p.Estado))
+            .OrderBy(p => p.FechaCreacion)
+            .Select(p => new ColaPedidoDto
+            {
+                IdPedido = p.IdPedido,
+                Estado = p.Estado,
+                TipoPedido = p.TipoPedido,
+                MesaNumero = p.Mesa != null ? p.Mesa.Numero : null,
+                EstadoPago = p.EstadoPago,
+                FechaCreacion = p.FechaCreacion,
+                NombrePedido = p.NombrePedido,
+                NombreCajero = p.Empleado != null ? p.Empleado.Nombre : null,
+                Detalle = p.DetallesPedidos!
+                    .Select(d => new ColaDetalleDto
+                    {
+                        Cantidad = d.Cantidad,
+                        Nombre = d.Producto != null ? d.Producto.Nombre : null,
+                        Observacion = d.Observacion
+                    })
+                    .ToList()
+            })
+            .ToListAsync(ct);
+
+        return Ok(cola);
+    }
+
     // Un pedido con todas sus líneas.
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(PedidoDetalleDto), StatusCodes.Status200OK)]

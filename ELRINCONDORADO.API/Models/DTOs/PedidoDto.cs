@@ -93,3 +93,76 @@ public class PedidoItemDto
     // true si el precio actual difiere del que se cobró.
     public bool PrecioCambioDesdeVenta { get; set; }
 }
+
+// ===== Escritura: el POS del Cajero =====
+
+/// Petición de creación de un pedido (POST /api/pedidos).
+public class CrearPedidoRequest
+{
+    public string? NombrePedido { get; set; }
+
+    // Si viene, se hace upsert del cliente por NIT.
+    public string? Nit { get; set; }
+    public string? RazonSocial { get; set; }
+
+    // "PARA_LLEVAR" o "MESA".
+    public string? TipoPedido { get; set; }
+
+    // Solo se guarda si TipoPedido es MESA.
+    public int? IdMesa { get; set; }
+
+    // EFECTIVO / QR / TARJETA.
+    public string? MetodoPago { get; set; }
+
+    public string? Observaciones { get; set; }
+
+    public List<CrearPedidoItemRequest> Items { get; set; } = new();
+}
+
+/// Una línea del carrito: un producto O una promoción.
+public class CrearPedidoItemRequest
+{
+    public int IdProducto { get; set; }
+    public int IdPromocion { get; set; }
+    public int Cantidad { get; set; }
+    public string? Observacion { get; set; }
+}
+
+/// Petición de cambio de estado (PUT /api/pedidos/{id}/estado).
+public class CambiarEstadoRequest
+{
+    public string? Estado { get; set; }
+}
+
+// ===== Cola de cocina =====
+
+/// Fila de la cola de cocina (GET /api/pedidos/cola).
+public class ColaPedidoDto
+{
+    public int IdPedido { get; set; }
+    public string Estado { get; set; } = string.Empty;
+    public string TipoPedido { get; set; } = string.Empty;
+    public int? MesaNumero { get; set; }
+    public string EstadoPago { get; set; } = string.Empty;
+    public DateTime FechaCreacion { get; set; }
+    public string? NombrePedido { get; set; }
+    public string? NombreCajero { get; set; }
+    public List<ColaDetalleDto> Detalle { get; set; } = new();
+}
+
+/// Línea resumida para la cola: solo lo que necesita la cocina.
+public class ColaDetalleDto
+{
+    public int Cantidad { get; set; }
+    public string? Nombre { get; set; }
+    public string? Observacion { get; set; }
+}
+
+/// Resultado de la búsqueda de cliente por NIT (GET /api/clientes?nit=).
+public class ClienteBusquedaDto
+{
+    public bool Ok { get; set; }
+    public string? RazonSocial { get; set; }
+    public bool Bloqueado { get; set; }
+    public string? Mensaje { get; set; }
+}

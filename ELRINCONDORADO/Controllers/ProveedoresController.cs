@@ -1,20 +1,19 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ELRINCONDORADO.Data;
+using ELRINCONDORADO.Services.Api;
 using ELRINCONDORADO.Models;
+using ELRINCONDORADO.Models.ApiDtos;
 
 namespace ELRINCONDORADO.Controllers
 {
     public class ProveedoresController : Controller
     {
-        private readonly AppDbContext _context;
+        private readonly ProveedoresApiService _apiService;
 
-        public ProveedoresController(AppDbContext context)
+        public ProveedoresController(ProveedoresApiService apiService)
         {
-            _context = context;
+            _apiService = apiService;
         }
 
-        // Verifica que haya sesión activa y que el rol sea ADMINISTRADOR
         private IActionResult? ValidarAcceso()
         {
             if (string.IsNullOrEmpty(HttpContext.Session.GetString("UsuarioId")))
@@ -26,37 +25,30 @@ namespace ELRINCONDORADO.Controllers
             return null;
         }
 
-        // GET: Proveedores
         public async Task<IActionResult> Index()
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            return View("~/Views/Administrador/Proveedores/Index.cshtml", await _context.Proveedores.ToListAsync());
+            var proveedores = await _apiService.GetAllAsync();
+            var model = proveedores.ToModel();
+            return View("~/Views/Administrador/Proveedores/Index.cshtml", model);
         }
 
-        // GET: Proveedores/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var proveedor = await _context.Proveedores
-                .FirstOrDefaultAsync(m => m.IdProveedor == id);
-            if (proveedor == null)
-            {
-                return NotFound();
-            }
+            var proveedor = await _apiService.GetByIdAsync(id.Value);
+            if (proveedor == null) return NotFound();
 
-            return View("~/Views/Administrador/Proveedores/Details.cshtml", proveedor);
+            var model = proveedor.ToModel();
+            return View("~/Views/Administrador/Proveedores/Details.cshtml", model);
         }
 
-        // GET: Proveedores/Create
         public IActionResult Create()
         {
             var acceso = ValidarAcceso();
@@ -65,113 +57,72 @@ namespace ELRINCONDORADO.Controllers
             return View("~/Views/Administrador/Proveedores/Create.cshtml");
         }
 
-        // POST: Proveedores/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("IdProveedor,Nombre,Telefono,Direccion,Email,Observaciones,Estado")] Proveedor proveedor)
+        public async Task<IActionResult> Create(ProveedorDto proveedor)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
             if (ModelState.IsValid)
             {
-                if (await _context.Proveedores.AnyAsync(p => p.Nombre == proveedor.Nombre))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese nombre de proveedor ya existe.");
-                    return View("~/Views/Administrador/Proveedores/Create.cshtml", proveedor);
-                }
+                var (success, message) = await _apiService.CreateAsync(proveedor);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                _context.Add(proveedor);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
             return View("~/Views/Administrador/Proveedores/Create.cshtml", proveedor);
         }
 
-        // GET: Proveedores/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var proveedor = await _context.Proveedores.FindAsync(id);
-            if (proveedor == null)
-            {
-                return NotFound();
-            }
-            return View("~/Views/Administrador/Proveedores/Edit.cshtml", proveedor);
+            var proveedor = await _apiService.GetByIdAsync(id.Value);
+            if (proveedor == null) return NotFound();
+
+            var model = proveedor.ToModel();
+            return View("~/Views/Administrador/Proveedores/Edit.cshtml", model);
         }
 
-        // POST: Proveedores/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("IdProveedor,Nombre,Telefono,Direccion,Email,Observaciones,Estado")] Proveedor proveedor)
+        public async Task<IActionResult> Edit(int id, ProveedorDto proveedor)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id != proveedor.IdProveedor)
-            {
-                return NotFound();
-            }
+            if (id != proveedor.IdProveedor) return NotFound();
 
             if (ModelState.IsValid)
             {
-                if (await _context.Proveedores.AnyAsync(p => p.Nombre == proveedor.Nombre && p.IdProveedor != proveedor.IdProveedor))
-                {
-                    ModelState.AddModelError(string.Empty, "Ese nombre de proveedor ya existe.");
-                    return View("~/Views/Administrador/Proveedores/Edit.cshtml", proveedor);
-                }
+                var (success, message) = await _apiService.EditAsync(id, proveedor);
+                if (success)
+                    return RedirectToAction(nameof(Index));
 
-                try
-                {
-                    _context.Update(proveedor);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ProveedorExists(proveedor.IdProveedor))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                ModelState.AddModelError(string.Empty, message);
             }
             return View("~/Views/Administrador/Proveedores/Edit.cshtml", proveedor);
         }
 
-        // GET: Proveedores/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var proveedor = await _context.Proveedores
-                .Include(p => p.Compras)
-                .FirstOrDefaultAsync(m => m.IdProveedor == id);
-            if (proveedor == null)
-            {
-                return NotFound();
-            }
+            var proveedor = await _apiService.GetByIdAsync(id.Value);
+            if (proveedor == null) return NotFound();
 
-            return View("~/Views/Administrador/Proveedores/Delete.cshtml", proveedor);
+            var model = proveedor.ToModel();
+            return View("~/Views/Administrador/Proveedores/Delete.cshtml", model);
         }
 
-        // POST: Proveedores/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -179,18 +130,11 @@ namespace ELRINCONDORADO.Controllers
             var acceso = ValidarAcceso();
             if (acceso != null) return acceso;
 
-            var proveedor = await _context.Proveedores.FindAsync(id);
-            if (proveedor != null)
-            {
-                _context.Proveedores.Remove(proveedor);
-                await _context.SaveChangesAsync();
-            }
-            return RedirectToAction(nameof(Index));
-        }
+            var (success, message) = await _apiService.DeleteAsync(id);
+            if (!success)
+                TempData["Error"] = message;
 
-        private bool ProveedorExists(int id)
-        {
-            return _context.Proveedores.Any(e => e.IdProveedor == id);
+            return RedirectToAction(nameof(Index));
         }
     }
 }

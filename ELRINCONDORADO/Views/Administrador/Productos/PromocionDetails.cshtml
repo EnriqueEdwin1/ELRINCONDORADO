@@ -3,7 +3,7 @@
 @{
     ViewData["Title"] = "Detalle de Promoción";
     Layout = null;
-    var promo = Model.Promocion;
+    var promo = Model;
     var nombre = Context.Session.GetString("Nombre");
 }
 
@@ -30,6 +30,7 @@
                 <a href="/Administrador" class="btn btn-sm btn-outline-secondary">⌂ Administración</a>
                 <a href="/Productos?pestana=promociones" class="btn btn-outline-secondary">Volver</a>
                 <a asp-action="PromocionEdit" asp-route-id="@promo.IdPromocion" class="btn btn-modulo">Editar</a>
+                <a asp-action="PromocionDelete" asp-route-id="@promo.IdPromocion" class="btn btn-outline-danger">Eliminar</a>
             </div>
         </div>
 
@@ -60,7 +61,7 @@
                     </div>
                     <div class="mb-2">
                         <span class="text-muted d-block">Vigencia</span>
-                        <strong>@promo.FechaInicio.ToString("dd/MM/yyyy") — @promo.FechaFin.ToString("dd/MM/yyyy")</strong>
+                        <strong>@(promo.FechaInicio?.ToString("dd/MM/yyyy") ?? "N/A") — @(promo.FechaFin?.ToString("dd/MM/yyyy") ?? "N/A")</strong>
                     </div>
                     <div>
                         <span class="text-muted d-block">En el cajero</span>
@@ -106,7 +107,7 @@
             <div class="col-lg-8">
                 <div class="form-card p-3">
                     <h5 class="mb-3">Productos incluidos</h5>
-                    @if (!Model.Incluidos.Any())
+                    @if (Model.Incluidos == null || !Model.Incluidos.Any())
                     {
                         <div class="alert alert-warning mb-0">
                             Esta promoción no tiene productos cargados, así que no se puede vender.

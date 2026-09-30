@@ -36,7 +36,7 @@
             <div class="d-flex gap-2">
                 <a href="/Administrador" class="btn btn-sm btn-outline-secondary">← Volver a administración</a>
                 <a asp-action="Index" class="btn btn-outline-secondary">Volver</a>
-                <a asp-action="Delete" asp-route-id="@Model.IdCompra" class="btn btn-eliminar">Eliminar</a>
+                <a asp-action="Anular" asp-route-id="@Model.IdCompra" class="btn btn-eliminar">Anular compra</a>
                 <a asp-action="Comprobante" asp-route-id="@Model.IdCompra" target="_blank" class="btn btn-modulo">Descargar comprobante PDF</a>
             </div>
         </div>

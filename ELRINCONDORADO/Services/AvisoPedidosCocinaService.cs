@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
-using ELRINCONDORADO.Data;
-using Microsoft.EntityFrameworkCore;
+using ELRINCONDORADO.Services.Api;
 
 namespace ELRINCONDORADO.Services
 {
@@ -17,7 +16,7 @@ namespace ELRINCONDORADO.Services
         private const int IntervaloSegundos = 10;
         private const string ArchivoAviso = "nuevo.wav";
 
-        // Flags de winmm: reproducir desde memoria, sin esperar y sin buscar otro sonido.
+        // Flags de winmm: reproducir desde memoria, sin esperar y no buscar otro sonido.
         private const uint SND_ASYNC = 0x0001;
         private const uint SND_NODEFAULT = 0x0002;
         private const uint SND_MEMORY = 0x0004;
@@ -28,7 +27,7 @@ namespace ELRINCONDORADO.Services
         [DllImport("winmm.dll", EntryPoint = "PlaySoundW", CharSet = CharSet.Unicode)]
         private static extern bool PlaySoundDesdeArchivo(string? name, IntPtr module, uint flags);
 
-        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IServiceProvider _serviceProvider;
         private readonly IWebHostEnvironment _entorno;
         private readonly PantallaCocinaTracker _pantallasCocina;
         private readonly ILogger<AvisoPedidosCocinaService> _log;
@@ -38,12 +37,12 @@ namespace ELRINCONDORADO.Services
         private bool? _habiaPantalla;
 
         public AvisoPedidosCocinaService(
-            IServiceScopeFactory scopeFactory,
+            IServiceProvider serviceProvider,
             IWebHostEnvironment entorno,
             PantallaCocinaTracker pantallasCocina,
             ILogger<AvisoPedidosCocinaService> log)
         {
-            _scopeFactory = scopeFactory;
+            _serviceProvider = serviceProvider;
             _entorno = entorno;
             _pantallasCocina = pantallasCocina;
             _log = log;
@@ -99,18 +98,16 @@ namespace ELRINCONDORADO.Services
             }
             if (!hayPantalla) return;
 
-            using var ambito = _scopeFactory.CreateScope();
-            var db = ambito.ServiceProvider.GetRequiredService<AppDbContext>();
+            var cocinaService = _serviceProvider.GetRequiredService<CocinaApiService>();
+            var cola = await cocinaService.GetColaAsync();
 
-            var pendientes = await db.Pedidos
-                .Where(p => p.Estado == "PENDIENTE")
-                .Select(p => p.IdPedido)
-                .ToListAsync();
+            // La cola incluye preparación y listos; el aviso solo aplica a los PENDIENTE.
+            var pendientes = cola?.Where(p => p.Estado == "PENDIENTE").ToList();
 
-            if (pendientes.Count == 0) return;
+            if (pendientes == null || pendientes.Count == 0) return;
 
             _log.LogInformation("Aviso de cocina emitido: {0} pedido(s) pendiente(s) [{1}].",
-                pendientes.Count, string.Join(", ", pendientes));
+                pendientes.Count, string.Join(", ", pendientes.Select(p => p.IdPedido)));
             Reproducir();
         }
 

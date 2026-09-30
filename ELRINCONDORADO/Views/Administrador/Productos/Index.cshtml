@@ -103,13 +103,11 @@
                         <th>Precio promo</th>
                         <th>Ahorro</th>
                         <th>Estado</th>
-                        <th class="text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in promociones)
+                    @foreach (var promo in promociones)
                     {
-                        var promo = item.Promocion;
                         <tr class="fila-clic" data-nombre="@promo.Nombre"
                             onclick="window.location.href='@Url.Action("PromocionDetails", new { id = promo.IdPromocion })';">
                             <td>@promo.IdPromocion</td>
@@ -131,20 +129,35 @@
                                 }
                             </td>
                             <td>
-                                @item.CantidadProductos producto(s)
-                                <div class="text-muted small">
-                                    @(item.ResumenProductos.Length > 60
-                                        ? item.ResumenProductos.Substring(0, 60) + "…"
-                                        : item.ResumenProductos)
-                                </div>
-                            </td>
-                            <td>@MonedaHelper.FormatearBs(item.SumaProductos)</td>
-                            <td><strong>@MonedaHelper.FormatearBs(item.Precio)</strong></td>
-                            <td>
-                                @if (item.PorcentajeAhorro > 0)
+                                @if (promo.Incluidos.Count == 0)
                                 {
-                                    <span class="badge-estado activo">Ahorro del @item.PorcentajeAhorro.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%</span>
-                                    <div class="text-muted small">ahorra @MonedaHelper.FormatearBs(item.Ahorro)</div>
+                                    <span class="badge-estado inactivo">Sin productos</span>
+                                }
+                                else
+                                {
+                                    <strong>@promo.CantidadProductos producto(s)</strong>
+                                    <ul class="list-unstyled mt-1 mb-0" style="font-size: 11px;">
+                                        @foreach (var item in promo.Incluidos)
+                                        {
+                                            <li>
+                                                <strong>@item.Cantidad&times;</strong> @item.ProductoNombre
+                                                <span class="text-muted">(@MonedaHelper.FormatearBs(item.ProductoPrecio))</span>
+                                                @if (!item.ProductoActivo)
+                                                {
+                                                    <span class="badge-estado inactivo">inactivo</span>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                            <td>@MonedaHelper.FormatearBs(promo.SumaProductos)</td>
+                            <td><strong>@MonedaHelper.FormatearBs(promo.Precio)</strong></td>
+                            <td>
+                                @if (promo.PorcentajeAhorro > 0)
+                                {
+                                    <span class="badge-estado activo">Ahorro del @promo.PorcentajeAhorro.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)%</span>
+                                    <div class="text-muted small">ahorra @MonedaHelper.FormatearBs(promo.Ahorro)</div>
                                 }
                                 else
                                 {
@@ -160,10 +173,6 @@
                                 {
                                     <span class="badge-estado inactivo">Inactiva</span>
                                 }
-                            </td>
-                            <td class="text-end" onclick="event.stopPropagation();">
-                                <a href="/Productos/PromocionEdit/@promo.IdPromocion" class="btn btn-sm btn-outline-secondary">Editar</a>
-                                <a href="/Productos/PromocionDelete/@promo.IdPromocion" class="btn btn-sm btn-outline-danger">Eliminar</a>
                             </td>
                         </tr>
                     }

@@ -77,6 +77,32 @@
         .btn-entregar { background: linear-gradient(135deg, #2e9e44, #1e7d34); }
         .btn-mesero:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 6px 14px rgba(0,0,0,.15); }
         .pie-tiempo { font-size: 13px; color: #9c8b73; padding: 10px 18px; border-top: 1px solid #f0ead9; background: #fdfbf5; }
+        .vacio-cocina {
+            text-align: center; padding: 70px 20px; color: #9c8b73;
+            border: 2px dashed #d9c9a3; border-radius: 16px; background: #fff;
+        }
+        .vacio-cocina .emblema { font-size: 56px; }
+
+        /* ===== Offcanvas ===== */
+        .offcanvas-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0ead2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .offcanvas-title {
+            font-weight: 800;
+            color: var(--marron);
+            font-size: 18px;
+        }
+        .offcanvas-body {
+            padding: 20px;
+        }
+        .offcanvas-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #f0ead2;
+        }
     </style>
     <link href="~/css/marca.css" rel="stylesheet" />
 </head>
@@ -86,6 +112,7 @@
             <a class="navbar-brand" href="/Mesero"><img src="~/img/logo-nav.png" alt="" class="marca-logo" /><span class="marca-nombre">El Rincón Dorado</span><span class="marca-modulo">Mesero</span></a>
             <div class="ms-auto d-flex align-items-center gap-2">
                 <span class="text-white-50 me-2">👤 @(nombre ?? "Mesero")</span>
+                <button type="button" class="btn btn-logout btn-sm" data-bs-toggle="offcanvas" data-bs-target="#offcanvasHistorial">📜 Historial</button>
                 <form method="post" action="/Auth/Logout">
                     <button type="submit" class="btn btn-logout btn-sm">Cerrar sesión</button>
                 </form>
@@ -98,7 +125,7 @@
             <h3 class="titulo-panel mb-0">
                 🛎️ Pedidos listos para servir <small>· listos de cocina</small>
             </h3>
-            <a href="/Mesero/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorListos">@(hayPedidos ? Model.Count() : 0)</span> para entregar</a>
+            <a href="/Mesero/Index" class="badge-cola text-decoration-none">🔄 <span id="contadorListos">@(Model?.Count() ?? 0)</span> para entregar</a>
         </div>
 
         @if (TempData["Exito"] != null)
@@ -127,7 +154,7 @@
         else
         {
             <div class="row">
-                @foreach (var pedido in Model)
+                @foreach (var pedido in Model ?? Enumerable.Empty<Pedido>())
                 {
                     var detalle = pedido.DetallesPedidos ?? Enumerable.Empty<DetallePedido>();
 
@@ -200,7 +227,87 @@
         }
     </div>
 
+    <!-- Offcanvas de Historial -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasHistorial" aria-labelledby="offcanvasHistorialLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="offcanvasHistorialLabel">📜 Historial de entregas de hoy</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <p style="color:#666; margin-bottom:15px;">Esta sección muestra todos los pedidos que has entregado hoy. Se reinicia automáticamente cada nuevo día.</p>
+            <div id="historialContenido">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="offcanvas-footer">
+            <button type="button" class="btn btn-logout w-100" onclick="window.location.href='/Mesero/Historial'">Ver historial completo</button>
+        </div>
+    </div>
+
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function cargarHistorial() {
+            try {
+                const response = await fetch('/Mesero/Historial');
+                const html = await response.text();
+                document.getElementById('historialContenido').innerHTML = html;
+            } catch (e) {
+                console.error('Error al cargar historial:', e);
+                document.getElementById('historialContenido').innerHTML = '<p class="text-danger">Error al cargar el historial.</p>';
+            }
+        }
+
+        // Cargar historial cuando se abre el offcanvas
+        const offcanvasElement = document.getElementById('offcanvasHistorial');
+        if (offcanvasElement) {
+            offcanvasElement.addEventListener('show.bs.offcanvas', function () {
+                cargarHistorial();
+            });
+        }
+
+        // ================= SignalR: Conexión en tiempo real =================
+        var connection = null;
+        var historialNecesitaActualizacion = false;
+
+        async function iniciarSignalR() {
+            try {
+                connection = new signalR.HubConnectionBuilder()
+                    .withUrl('/pedidosHub')
+                    .withAutomaticReconnect()
+                    .build();
+
+                connection.on('RecibirCambioEstado', function (idPedido, estado) {
+                    console.log('Cambio de estado:', idPedido, estado);
+                    if (estado === 'ENTREGADO') {
+                        // Si el offcanvas está abierto, recargar el historial
+                        if (offcanvasElement.classList.contains('show')) {
+                            cargarHistorial();
+                        } else {
+                            // Marcar que necesita actualización cuando se abra
+                            historialNecesitaActualizacion = true;
+                        }
+                    }
+                });
+
+                connection.onreconnected(function () {
+                    console.log('SignalR reconectado');
+                });
+
+                await connection.start();
+                console.log('SignalR conectado (Mesero)');
+            } catch (err) {
+                console.error('Error al conectar SignalR:', err);
+                setTimeout(iniciarSignalR, 5000);
+            }
+        }
+
+        // Iniciar SignalR
+        iniciarSignalR();
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script>
         // ================= SignalR: Conexión en tiempo real =================

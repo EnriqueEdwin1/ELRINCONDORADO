@@ -107,11 +107,14 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Swagger disponible en todos los ambientes (desarrollo y producción)
+// Debe ir ANTES de UseHttpsRedirection para que funcione correctamente
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ELRINCONDORADO API V1");
+    c.RoutePrefix = "swagger";
+});
 
 // Orden segun el template oficial de ASP.NET Core: la redireccion a HTTPS
 // ocurre antes de procesar la autenticacion.

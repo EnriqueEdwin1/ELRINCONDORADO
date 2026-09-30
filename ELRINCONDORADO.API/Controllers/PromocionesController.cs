@@ -90,6 +90,8 @@ public class PromocionesController : ControllerBase
             return NotFound();
         }
 
+        // ConstruirAsync ya deja Incluidos armado, así que no hace falta una
+        // segunda consulta: el detalle y el listado devuelven la misma información.
         var detalle = new PromocionDetalleDto
         {
             IdPromocion = promocion.IdPromocion,
@@ -111,7 +113,7 @@ public class PromocionesController : ControllerBase
             PorcentajeAhorro = promocion.PorcentajeAhorro,
             TieneAhorro = promocion.TieneAhorro,
             EstaActiva = promocion.EstaActiva,
-            Incluidos = await CargarIncluidosAsync(promocion.IdPromocion, ct)
+            Incluidos = promocion.Incluidos
         };
 
         return Ok(detalle);
@@ -159,6 +161,7 @@ public class PromocionesController : ControllerBase
                 d.IdProducto,
                 Nombre = d.Producto != null ? d.Producto.Nombre : null,
                 Precio = d.Producto!.Precio,
+                Activo = d.Producto!.Activo,
                 d.Cantidad
             })
             .ToListAsync(ct);
@@ -181,6 +184,21 @@ public class PromocionesController : ControllerBase
                     .OrderBy(l => l.Nombre)
                     .Select(l => $"{l.Nombre} x{l.Cantidad}"));
 
+            // El listado también viaja con sus productos, para que el panel y el
+            // POS puedan mostrar el contenido de cada promoción sin un GET extra.
+            promo.Incluidos = suyas
+                .OrderBy(l => l.Nombre)
+                .Select(l => new PromocionProductoDto
+                {
+                    IdProducto = l.IdProducto,
+                    ProductoNombre = l.Nombre,
+                    ProductoPrecio = l.Precio,
+                    ProductoActivo = l.Activo,
+                    Cantidad = l.Cantidad,
+                    Subtotal = l.Precio * l.Cantidad
+                })
+                .ToList();
+
             promo.Ahorro = promo.SumaProductos - promo.Valor;
 
             // Misma regla del MVC: sin suma o sin ahorro real, el porcentaje es 0.
@@ -196,24 +214,5 @@ public class PromocionesController : ControllerBase
         }
 
         return base_;
-    }
-
-    // Productos incluidos con su precio y estado, para el detalle.
-    private async Task<List<PromocionProductoDto>> CargarIncluidosAsync(int idPromocion, CancellationToken ct)
-    {
-        return await _db.DetallePromociones
-            .AsNoTracking()
-            .Where(d => d.IdPromocion == idPromocion)
-            .OrderBy(d => d.Producto!.Nombre)
-            .Select(d => new PromocionProductoDto
-            {
-                IdProducto = d.IdProducto,
-                ProductoNombre = d.Producto != null ? d.Producto.Nombre : null,
-                ProductoPrecio = d.Producto!.Precio,
-                ProductoActivo = d.Producto!.Activo,
-                Cantidad = d.Cantidad,
-                Subtotal = d.Producto!.Precio * d.Cantidad
-            })
-            .ToListAsync(ct);
     }
 }
