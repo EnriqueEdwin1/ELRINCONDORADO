@@ -1,0 +1,47 @@
+services:
+  # Base de datos PostgreSQL (opcional si usas Supabase externo)
+  # type: pserv
+  # name: elrincondorado-db
+  # env: evar
+  # plan: free
+  # region: oregon
+  # databaseName: elrincondorado
+  # user: elrincondorado
+  
+  # Servicio de API
+  - type: web
+    name: elrincondorado-api
+    env: docker
+    plan: free
+    region: oregon
+    dockerContext: ./ELRINCONDORADO.API
+    dockerfilePath: ./ELRINCONDORADO.API/Dockerfile
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false  # Debes configurar esto manualmente en Render con tu cadena de Supabase
+      - key: Jwt__SigningKey
+        sync: false  # Debes configurar esto manualmente en Render
+      - key: Jwt__Issuer
+        value: https://elrincondorado-api.onrender.com
+      - key: Jwt__Audience
+        value: https://elrincondorado-api.onrender.com
+    autoDeploy: true
+
+  # Servicio de MVC
+  - type: web
+    name: elrincondorado-mvc
+    env: docker
+    plan: free
+    region: oregon
+    dockerContext: ./ELRINCONDORADO
+    dockerfilePath: ./ELRINCONDORADO/Dockerfile
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ConnectionStrings__DefaultConnection
+        sync: false  # Debes configurar esto manualmente en Render con tu cadena de Supabase
+      - key: ApiBaseUrl
+        value: https://elrincondorado-api.onrender.com
+    autoDeploy: true

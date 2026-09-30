@@ -1,0 +1,15 @@
+**/bin
+**/obj
+**/out
+**/.vs
+**/.vscode
+**/*.sln
+**/*.csproj
+**/*.user
+**/*.suo
+**/*.cache
+**/*.lock.json
+**/Properties
+**/appsettings.Development.json
+**/appsettings.json
+**/user-secrets
